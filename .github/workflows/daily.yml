@@ -35,6 +35,9 @@ jobs:
               cp "/tmp/$file" "logs/$file"
             fi
           done
+          if git cat-file -e origin/data:logs/fpl_snapshots 2>/dev/null; then
+            git archive origin/data logs/fpl_snapshots | tar -x
+          fi
           mkdir -p output
           for file in latest.json fixtures.json ratings.json season.json performance.json; do
             if git show "origin/data:output/$file" > "output/$file" 2>/dev/null; then
