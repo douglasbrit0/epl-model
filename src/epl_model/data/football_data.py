@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pandas as pd
@@ -10,6 +11,7 @@ import requests
 BASE_URL = "https://www.football-data.co.uk/mmz4281/{season}/E0.csv"
 PINNACLE = ("PSCH", "PSCD", "PSCA")
 MARKET_AVERAGE = ("AvgCH", "AvgCD", "AvgCA")
+LOGGER = logging.getLogger(__name__)
 
 
 def season_codes(first_start_year: int = 2017, last_start_year: int | None = None) -> list[str]:
@@ -18,16 +20,32 @@ def season_codes(first_start_year: int = 2017, last_start_year: int | None = Non
     return [f"{year % 100:02d}{(year + 1) % 100:02d}" for year in range(first_start_year, last + 1)]
 
 
-def download_history(raw_dir: Path, first_start_year: int = 2017, last_start_year: int | None = None) -> list[Path]:
-    """Download available EPL CSVs without treating a missing current season as success."""
+def download_history(raw_dir: Path, first_start_year: int = 2017, last_start_year: int | None = None, refresh_seasons: int = 2) -> list[Path]:
+    """Download EPL CSVs; completed seasons are fetched once, the latest ones every run.
+
+    If refreshing a season fails but a cached copy exists, the cached copy is used with a
+    warning, so a transient outage does not stop the pipeline.
+    """
     raw_dir.mkdir(parents=True, exist_ok=True)
+    codes = season_codes(first_start_year, last_start_year)
     paths = []
-    for season in season_codes(first_start_year, last_start_year):
-        response = requests.get(BASE_URL.format(season=season), timeout=45)
-        response.raise_for_status()
-        if not response.content.strip():
-            raise RuntimeError(f"Empty football-data.co.uk response for season {season}")
+    for position, season in enumerate(codes):
         target = raw_dir / f"E0_{season}.csv"
+        refresh = position >= len(codes) - refresh_seasons
+        if target.exists() and not refresh:
+            paths.append(target)
+            continue
+        try:
+            response = requests.get(BASE_URL.format(season=season), timeout=45)
+            response.raise_for_status()
+            if not response.content.strip():
+                raise RuntimeError(f"Empty football-data.co.uk response for season {season}")
+        except (requests.RequestException, RuntimeError) as error:
+            if not target.exists():
+                raise
+            LOGGER.warning("Could not refresh %s (%s); using cached copy", target.name, error)
+            paths.append(target)
+            continue
         target.write_bytes(response.content)
         paths.append(target)
     if not paths:

@@ -7,18 +7,19 @@ import pandas as pd
 
 from epl_model.evaluation.metrics import closing_odds_probabilities, multiclass_scores, outcome_probabilities
 from epl_model.models import DixonColesModel
+from epl_model.seasons import season_labels
 
 
 def walk_forward(matches: pd.DataFrame, model_factory=DixonColesModel) -> pd.DataFrame:
     """Predict matchweeks using only matches before that week's first kickoff.
 
     Historical E0 files do not consistently include matchweek numbers. When absent,
-    the walk-forward blocks are Monday-start calendar weeks within each EPL season.
+    the walk-forward blocks are seven-day blocks counted from 1 July of each EPL season.
     """
     data = matches.copy()
     data["kickoff_utc"] = pd.to_datetime(data["kickoff_utc"], utc=True)
     data = data.sort_values("kickoff_utc")
-    data["season"] = data["kickoff_utc"].map(lambda value: value.year if value.month >= 7 else value.year - 1)
+    data["season"] = season_labels(data["kickoff_utc"])
     if "matchweek" in data and data["matchweek"].notna().all():
         data["walkweek"] = data["matchweek"].astype(int)
     else:

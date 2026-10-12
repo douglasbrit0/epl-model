@@ -16,6 +16,13 @@ def score_prediction_log(log_path: Path, results: pd.DataFrame, output_path: Pat
     predictions = pd.DataFrame(logged)
     if not {"home", "away", "kickoff_utc"}.issubset(predictions.columns):
         raise ValueError("Prediction log must include home, away, and kickoff_utc for result matching")
+    # A fixture is predicted every day until kickoff; score only the last pre-kickoff forecast
+    # per model version so each fixture counts once.
+    kickoff = pd.to_datetime(predictions["kickoff_utc"], utc=True)
+    generated = pd.to_datetime(predictions["generated_at"], utc=True)
+    predictions = predictions.loc[generated < kickoff].assign(_generated=generated)
+    latest = predictions.groupby(["fixture_id", "model_version"])["_generated"].idxmax()
+    predictions = predictions.loc[latest].drop(columns="_generated")
     predictions["match_date"] = pd.to_datetime(predictions["kickoff_utc"], utc=True).dt.date
     result_rows = results.copy()
     result_rows["match_date"] = pd.to_datetime(result_rows["kickoff_utc"], utc=True).dt.date

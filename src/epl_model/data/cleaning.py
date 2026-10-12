@@ -1,8 +1,13 @@
 """Canonical joins between results and xG records."""
 
+import logging
+from pathlib import Path
+
 import pandas as pd
 
 from epl_model.data.names import normalize_match_teams
+
+LOGGER = logging.getLogger(__name__)
 
 
 def join_xg(results: pd.DataFrame, xg: pd.DataFrame) -> pd.DataFrame:
@@ -24,3 +29,13 @@ def join_xg(results: pd.DataFrame, xg: pd.DataFrame) -> pd.DataFrame:
         sample = missing.head(5).to_dict("records")
         raise AssertionError(f"Results without exact Understat xG match: {len(missing)}; examples={sample}")
     return joined.drop(columns=["_merge", "match_date"])
+
+
+def attach_optional_xg(results: pd.DataFrame, xg_path: Path) -> pd.DataFrame:
+    """Join an npxG export when one is supplied; otherwise run goals-only with a warning."""
+    if not xg_path.exists():
+        LOGGER.warning("No xG export at %s; running the goals-only model", xg_path)
+        return results
+    from epl_model.data.understat import load_understat_npxg
+
+    return join_xg(results, load_understat_npxg(xg_path))

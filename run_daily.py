@@ -5,15 +5,15 @@ import json
 
 import pandas as pd
 
-from epl_model.data.cleaning import join_xg
+from epl_model.data.cleaning import attach_optional_xg
 from epl_model.data.football_data import download_history, load_history
-from epl_model.data.football_data_org import upcoming_fixtures
+from epl_model.data.football_data_org import season_fixtures, unplayed, upcoming_fixtures
 from epl_model.data.names import normalize_match_teams
 from epl_model.data.storage import save_matches
-from epl_model.data.understat import load_understat_npxg
 from epl_model.evaluation.track_record import score_prediction_log
 from epl_model.pipeline import choose_validated_model, make_payloads
 from epl_model.publish.contract import publish_snapshot
+from epl_model.seasons import season_start_year
 
 ROOT = Path(__file__).resolve().parent
 
@@ -24,18 +24,13 @@ def main() -> None:
     processed = ROOT / "data" / "processed"
     history_paths = download_history(raw)
     results = normalize_match_teams(load_history(history_paths), "football_data")
-    understat_file = raw / "understat_npxg.csv"
-    xg = load_understat_npxg(understat_file)
-    matches = join_xg(results, xg)
+    matches = attach_optional_xg(results, raw / "understat_npxg.csv")
     save_matches(matches, processed / "matches.parquet")
     now = pd.Timestamp.now(tz="UTC")
     ten_day_fixtures = upcoming_fixtures(days=10, now=now.to_pydatetime())
-    season_year = now.year if now.month >= 7 else now.year - 1
-    season_end = pd.Timestamp(year=season_year + 1, month=6, day=1, tz="UTC")
-    season_days_remaining = max(1, (season_end.date() - now.date()).days)
-    full_season_fixtures = upcoming_fixtures(days=season_days_remaining, now=now.to_pydatetime())
     ten_day_fixtures = normalize_match_teams(ten_day_fixtures, "football_data_org")
-    full_season_fixtures = normalize_match_teams(full_season_fixtures, "football_data_org")
+    full_season_fixtures = normalize_match_teams(season_fixtures(season_start_year(now)), "football_data_org")
+    full_season_fixtures = unplayed(full_season_fixtures, matches, season_start_year(now))
     ten_day_fixtures["kickoff_utc"] = pd.to_datetime(ten_day_fixtures["kickoff_utc"], utc=True)
     full_season_fixtures["kickoff_utc"] = pd.to_datetime(full_season_fixtures["kickoff_utc"], utc=True)
     model = choose_validated_model(matches)

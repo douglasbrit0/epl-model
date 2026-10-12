@@ -1,17 +1,18 @@
 """Reproduce walk-forward metrics, market benchmark, calibration and P&L reports."""
 
+import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from epl_model.data.cleaning import join_xg
+from epl_model.data.cleaning import attach_optional_xg
 from epl_model.data.football_data import download_history, load_history
-from epl_model.data.understat import load_understat_npxg
 from epl_model.evaluation.backtest import flat_stake_edges, flat_stake_profit, summarize_walk_forward, walk_forward
 from epl_model.evaluation.metrics import closing_odds_probabilities, reliability_bins
 from epl_model.data.names import normalize_match_teams
+from epl_model.pipeline import backtest_summary
 
 ROOT = Path(__file__).resolve().parent
 
@@ -21,11 +22,11 @@ def main() -> None:
     reports.mkdir(parents=True, exist_ok=True)
     history = load_history(download_history(ROOT / "data" / "raw"))
     history = normalize_match_teams(history, "football_data")
-    xg = load_understat_npxg(ROOT / "data" / "raw" / "understat_npxg.csv")
-    matches = join_xg(history, xg)
+    matches = attach_optional_xg(history, ROOT / "data" / "raw" / "understat_npxg.csv")
     baseline = walk_forward(matches)
     baseline["flat_stake_profit"] = flat_stake_profit(baseline, threshold=0.02)
     baseline.to_csv(reports / "walk_forward.csv", index=False)
+    (reports / "backtest_summary.json").write_text(json.dumps(backtest_summary(baseline), indent=2) + "\n", encoding="utf-8")
     summary = summarize_walk_forward(baseline)
     pd.DataFrame([summary]).to_csv(reports / "metrics.csv", index=False)
     edges = flat_stake_edges(baseline)

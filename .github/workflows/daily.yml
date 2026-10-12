@@ -43,13 +43,13 @@ jobs:
               rm -f "output/$file"
             fi
           done
-      - name: Load Understat non-penalty xG export
+      - name: Load optional non-penalty xG export
         env:
           UNDERSTAT_NPXG_URL: ${{ secrets.UNDERSTAT_NPXG_URL }}
         run: |
           if [ -z "$UNDERSTAT_NPXG_URL" ]; then
-            echo "Missing UNDERSTAT_NPXG_URL secret: provide a verified Understat npxG export URL." >&2
-            exit 1
+            echo "No UNDERSTAT_NPXG_URL secret: running the goals-only model."
+            exit 0
           fi
           curl --fail --location --silent --show-error "$UNDERSTAT_NPXG_URL" -o data/raw/understat_npxg.csv
       - name: Generate validated snapshot

@@ -11,6 +11,7 @@ import pandas as pd
 
 from epl_model.evaluation.metrics import closing_odds_probabilities, outcome_probabilities, score_probabilities
 from epl_model.models import DixonColesModel
+from epl_model.seasons import season_start_year
 from epl_model.simulation.season import simulate_season
 
 
@@ -23,10 +24,9 @@ def choose_validated_model(matches: pd.DataFrame, seed: int = 1729) -> DixonCole
     if len(training) < 100 or validation.empty:
         raise ValueError("At least 100 training matches and a chronological validation tail are required")
     cutoff = pd.to_datetime(validation["kickoff_utc"], utc=True).min()
-    specs = [
-        ("dc-goals", (0.0,)),
-        ("dc-xg-blended", (0.0, 0.25, 0.5, 0.75, 1.0)),
-    ]
+    specs = [("dc-goals", (0.0,))]
+    if {"npxg_home", "npxg_away"}.issubset(data.columns) and data[["npxg_home", "npxg_away"]].notna().all().all():
+        specs.append(("dc-xg-blended", (0.0, 0.25, 0.5, 0.75, 1.0)))
     scores = []
     for version, alphas in specs:
         model = DixonColesModel(xi_candidates=(0.0, 0.001, 0.002, 0.003, 0.005), alpha_candidates=alphas)
@@ -50,8 +50,7 @@ def current_table(matches: pd.DataFrame, teams: list[str]) -> pd.DataFrame:
     data = matches.copy()
     dates = pd.to_datetime(data["kickoff_utc"], utc=True)
     today = pd.Timestamp.now(tz="UTC")
-    season_start_year = today.year if today.month >= 7 else today.year - 1
-    season_start = pd.Timestamp(year=season_start_year, month=7, day=1, tz="UTC")
+    season_start = pd.Timestamp(year=season_start_year(today), month=7, day=1, tz="UTC")
     season = data.loc[(dates >= season_start) & (dates < today)]
     records = {team: {"points": 0, "gf": 0, "ga": 0, "played": 0} for team in teams}
     for row in season.to_dict("records"):
@@ -136,8 +135,7 @@ def make_payloads(model: DixonColesModel, matches: pd.DataFrame, fixtures: pd.Da
     season_forecasts = model.predict(season_fixtures)
     match_dates = pd.to_datetime(matches["kickoff_utc"], utc=True)
     today = pd.Timestamp.now(tz="UTC")
-    season_year = today.year if today.month >= 7 else today.year - 1
-    season_start = pd.Timestamp(year=season_year, month=7, day=1, tz="UTC")
+    season_start = pd.Timestamp(year=season_start_year(today), month=7, day=1, tz="UTC")
     current_results = matches.loc[(match_dates >= season_start) & (match_dates < today)]
     teams = sorted(
         set(current_results["home"])
@@ -172,34 +170,56 @@ def make_payloads(model: DixonColesModel, matches: pd.DataFrame, fixtures: pd.Da
     return payloads, log_records
 
 
+def backtest_summary(predictions: pd.DataFrame) -> dict:
+    """Condense walk-forward predictions into the backtest part of performance.json."""
+    from epl_model.evaluation.metrics import closing_odds_probabilities, multiclass_scores, reliability_bins
+
+    window = predictions.tail(250)
+    metrics = multiclass_scores(window[["p_home", "p_draw", "p_away"]].to_numpy(), window["outcome"].to_numpy(dtype=int))
+    market_log_loss = market_rps = None
+    odds_columns = ["odds_home", "odds_draw", "odds_away"]
+    if set(odds_columns).issubset(window.columns):
+        valid = window[odds_columns].notna().all(axis=1)
+        if valid.any():
+            market = np.vstack([closing_odds_probabilities(tuple(values), "power") for values in window.loc[valid, odds_columns].to_numpy(dtype=float)])
+            market_scores = multiclass_scores(market, window.loc[valid, "outcome"].to_numpy(dtype=int))
+            market_log_loss, market_rps = market_scores["log_loss"], market_scores["rps"]
+    return {
+        "rolling": {
+            "window_end": pd.to_datetime(window["kickoff_utc"], utc=True).max().date().isoformat(),
+            "model_log_loss": metrics["log_loss"],
+            "model_rps": metrics["rps"],
+            "market_log_loss": market_log_loss,
+            "market_rps": market_rps,
+        },
+        "calibration_bins": reliability_bins(predictions[["p_home", "p_draw", "p_away"]].to_numpy(), predictions["outcome"].to_numpy(dtype=int)),
+        "flat_stake_pnl": float(predictions["flat_stake_profit"].fillna(0).sum()) if "flat_stake_profit" in predictions else 0.0,
+    }
+
+
 def _performance_payload(model_version: str) -> dict:
-    """Load available walk-forward evidence; empty arrays are honest before backtest."""
+    """Load available walk-forward evidence; empty arrays are honest before backtest.
+
+    Prefers the committed ``reports/backtest_summary.json`` (the full CSV is not committed,
+    so it is absent on the daily runner) and falls back to ``reports/walk_forward.csv``.
+    """
+    summary_path = Path("reports/backtest_summary.json")
     report = Path("reports/walk_forward.csv")
-    predictions = pd.read_csv(report) if report.exists() else pd.DataFrame()
     rolling = []
     bins = []
     pnl = 0.0
-    if not predictions.empty and {"outcome", "p_home", "p_draw", "p_away"}.issubset(predictions.columns):
-        from epl_model.evaluation.metrics import multiclass_scores, reliability_bins
-
-        probabilities = predictions[["p_home", "p_draw", "p_away"]].to_numpy()
-        outcomes = predictions["outcome"].to_numpy(dtype=int)
-        window = predictions.tail(250)
-        metrics = multiclass_scores(window[["p_home", "p_draw", "p_away"]].to_numpy(), window["outcome"].to_numpy(dtype=int))
-        market_log_loss = market_rps = None
-        odds_columns = ["odds_home", "odds_draw", "odds_away"]
-        if set(odds_columns).issubset(window.columns):
-            valid = window[odds_columns].notna().all(axis=1)
-            if valid.any():
-                from epl_model.evaluation.metrics import closing_odds_probabilities
-
-                market = np.vstack([closing_odds_probabilities(tuple(values), "power") for values in window.loc[valid, odds_columns].to_numpy(dtype=float)])
-                market_scores = multiclass_scores(market, window.loc[valid, "outcome"].to_numpy(dtype=int))
-                market_log_loss, market_rps = market_scores["log_loss"], market_scores["rps"]
-        rolling.append({"window_end": pd.to_datetime(window["kickoff_utc"], utc=True).max().date().isoformat(), "model_log_loss": metrics["log_loss"], "model_rps": metrics["rps"], "market_log_loss": market_log_loss, "market_rps": market_rps})
-        bins = reliability_bins(probabilities, outcomes)
-        if "flat_stake_profit" in predictions:
-            pnl = float(predictions["flat_stake_profit"].fillna(0).sum())
+    summary = None
+    if summary_path.exists():
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    elif report.exists():
+        predictions = pd.read_csv(report)
+        if not predictions.empty and {"outcome", "p_home", "p_draw", "p_away"}.issubset(predictions.columns):
+            summary = backtest_summary(predictions)
+    predictions = pd.read_csv(report) if report.exists() else pd.DataFrame()
+    if summary is not None:
+        rolling.append(summary["rolling"])
+        bins = summary["calibration_bins"]
+        pnl = summary["flat_stake_pnl"]
     scored_path = Path("logs/scored_predictions.jsonl")
     prediction_log_path = Path("logs/prediction_log.jsonl")
     if scored_path.exists() and prediction_log_path.exists():

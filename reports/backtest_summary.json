@@ -1,0 +1,72 @@
+{
+  "rolling": {
+    "window_end": "2026-09-20",
+    "model_log_loss": 1.0702017204616932,
+    "model_rps": 0.21089349307531854,
+    "market_log_loss": 1.0618572321218918,
+    "market_rps": 0.20849442174725066
+  },
+  "calibration_bins": [
+    {
+      "bin": 0,
+      "mean_probability": 0.06079076906505521,
+      "observed_frequency": 0.09193245778611632,
+      "count": 533
+    },
+    {
+      "bin": 1,
+      "mean_probability": 0.15763822080635576,
+      "observed_frequency": 0.1559748427672956,
+      "count": 1590
+    },
+    {
+      "bin": 2,
+      "mean_probability": 0.2512981635151111,
+      "observed_frequency": 0.2672153635116598,
+      "count": 3645
+    },
+    {
+      "bin": 3,
+      "mean_probability": 0.3455346992794453,
+      "observed_frequency": 0.3453192808431494,
+      "count": 1613
+    },
+    {
+      "bin": 4,
+      "mean_probability": 0.44863195044826054,
+      "observed_frequency": 0.41492265696087355,
+      "count": 1099
+    },
+    {
+      "bin": 5,
+      "mean_probability": 0.5464150912454492,
+      "observed_frequency": 0.5219123505976095,
+      "count": 753
+    },
+    {
+      "bin": 6,
+      "mean_probability": 0.6464525524991175,
+      "observed_frequency": 0.6352313167259787,
+      "count": 562
+    },
+    {
+      "bin": 7,
+      "mean_probability": 0.7467070420899068,
+      "observed_frequency": 0.7414330218068536,
+      "count": 321
+    },
+    {
+      "bin": 8,
+      "mean_probability": 0.8435227813139253,
+      "observed_frequency": 0.8198757763975155,
+      "count": 161
+    },
+    {
+      "bin": 9,
+      "mean_probability": 0.9376961162448189,
+      "observed_frequency": 0.8372093023255814,
+      "count": 43
+    }
+  ],
+  "flat_stake_pnl": -131.66
+}

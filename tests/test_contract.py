@@ -57,7 +57,7 @@ def test_daily_performance_reports_power_and_shin_market_scores(tmp_path):
     scored = tmp_path / "scored_predictions.jsonl"
     record = {
         "prediction_id": "p1", "fixture_id": "fdo:42", "model_version": "v1",
-        "generated_at": "2026-10-12T06:00:00Z", "kickoff_utc": "2026-10-10T15:00:00Z",
+        "generated_at": "2026-10-10T06:00:00Z", "kickoff_utc": "2026-10-10T15:00:00Z",
         "home": "Arsenal", "away": "Chelsea", "p_home": 0.5, "p_draw": 0.3, "p_away": 0.2,
     }
     log.write_text(json.dumps(record) + "\n")

@@ -1,5 +1,4 @@
 .venv/
-.venv/
 *.egg-info/
 __pycache__/
 *.py[cod]
@@ -13,3 +12,6 @@ data/processed/**
 reports/*.png
 reports/*.csv
 reports/*.json
+!reports/backtest_summary.json
+reports/**/*.png
+reports/**/*.csv
