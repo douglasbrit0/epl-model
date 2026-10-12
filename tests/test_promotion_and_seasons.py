@@ -108,3 +108,28 @@ def test_returning_team_starts_from_prior_not_its_earlier_spell():
     assert fitted.scoreline_matrix("F", "A").tolist() == fitted.scoreline_matrix("H", "A").tolist()
     legacy = SmallLeagueModel(xi_candidates=(0.0,), alpha_candidates=(0.0,), split_spells=False).fit(data, "2023-08-01")
     assert legacy.attack["F"] > fitted._unseen[0]
+
+
+def test_dynamic_model_gradient_and_temporal_cutoff():
+    from epl_model.models.dynamic import DynamicDixonColesModel
+
+    class SmallDynamic(DynamicDixonColesModel):
+        min_season_matches = 20
+
+    data = league()
+    captured = {}
+    fitted = SmallDynamic(block_days=60)
+    original = fitted._objective
+
+    def spy(params, design, layout):
+        captured["args"] = (design, layout)
+        return original(params, design, layout)
+
+    fitted._objective = spy
+    fitted.fit(data, "2023-10-01")
+    assert fitted.training_max_date < pd.Timestamp("2023-10-01", tz="UTC")
+    design, layout = captured["args"]
+    size = 2 * layout["blocks"] + 2 * layout["blocks"] * layout["count"] + 1
+    params = np.random.default_rng(5).normal(0, 0.1, size)
+    numeric = approx_fprime(params, lambda x: original(x, design, layout)[0], 1e-7)
+    assert np.allclose(numeric, original(params, design, layout)[1], atol=1e-5)

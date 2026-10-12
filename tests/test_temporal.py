@@ -74,3 +74,20 @@ def test_walk_forward_holds_out_complete_week_before_prediction():
         assert group["fit_data_through"].nunique() == 1
         cutoff = pd.to_datetime(group["kickoff_utc"], utc=True).min().normalize()
         assert pd.to_datetime(group["fit_data_through"], utc=True).max() < cutoff
+
+
+def test_nested_tuning_chooses_each_season_from_earlier_seasons_only():
+    from epl_model.evaluation.tuning import DEFAULT_CONFIG, nested_select
+
+    rows = []
+    for season in (2018, 2019, 2020):
+        for xi in (0.001, 0.002):
+            # xi=0.001 is perfect in 2018 and useless afterwards; xi=0.002 the reverse.
+            good = (xi == 0.001) == (season == 2018)
+            rows.append({"season": season, "matchweek": 1, "xi": xi, "prior_scale": 1.0, "outcome": 0,
+                         "p_home": 0.9 if good else 0.1, "p_draw": 0.05 if good else 0.45, "p_away": 0.05 if good else 0.45})
+    _, chosen, production = nested_select(pd.DataFrame(rows))
+    assert chosen[2018] == DEFAULT_CONFIG  # nothing earlier to tune on
+    assert chosen[2019]["xi"] == 0.001  # only 2018 is visible; the 2019 result must not leak in
+    assert chosen[2020]["xi"] in (0.001, 0.002)
+    assert production["xi"] == 0.002

@@ -96,3 +96,150 @@ the CI excluding zero. Bug fixes are accepted on correctness, then re-measured t
   failed refresh falls back to the cached file with a warning.
 - **Sparse fits:** `scoreline_matrix` clips log-rates to the likelihood's bounds, which prevents NaN
   predictions in the archive's first weeks.
+
+---
+
+# Phase 2 — optimisation and model structure
+
+All Phase 2 comparisons are paired against the production model at the time: E2 for E3, then E3 for
+everything after. Every new hyperparameter is nested-tuned: season S uses the value with the best 1X2
+log-loss over evaluated seasons before S, and the first season uses the "off"/default value.
+
+## E3 — Nested walk-forward tuning of decay and promoted-prior strength (accepted → **production**)
+
+- **Hypothesis:** the per-refit choice of xi (best of 5 on the last 20% of training data, scored on
+  scoreline likelihood) is noisy and flips week to week (audit B8). Choosing fixed settings by
+  out-of-sample 1X2 log-loss on earlier seasons is more stable, and also tunes the promoted-prior
+  strength, which E2 set by empirical Bayes.
+- **Change:**
+  - Grid: xi ∈ {0, 0.0005, 0.001, 0.0015, 0.002, 0.0025, 0.003, 0.004, 0.005, 0.0065} ×
+    prior_scale ∈ {0, 0.125, 0.25, 0.5, 1, 2, 4} (70 configurations, each a full walk-forward).
+  - Season S uses the best configuration on seasons < S; 2018/19 uses the Dixon–Coles default
+    (xi 0.002, scale 1).
+  - Production uses the best over all evaluated seasons, saved in `reports/tuning.json` by
+    `run_backtest.py` and read by the daily job.
+- **Selections:** 2019: (0.001, 0) · 2020: (0.001, 0.5) · 2021: (0.002, 0.5) · 2022: (0.0015, 0.5) ·
+  2023–2026: (0.0025 or 0.002, 0.5). Production: **xi 0.0025, prior_scale 0.5**.
+- **Grid history (disclosed):** the first grid stopped at prior_scale 0.5, and the selection kept
+  landing on that edge, so the grid was extended to {0, 0.125, 0.25}. With the first grid the
+  result was LL −0.0029 [−0.0053, −0.0007], RPS −0.0010 [−0.0018, −0.0003]. The extended grid is
+  the one reported and used. Its 2019/20 choice, made on one season of history, picked
+  prior_scale 0 and cost 2019/20 some accuracy.
+
+| Season | E2 LL | E3 LL | ΔLL [95% CI] | E2 RPS | E3 RPS | ΔRPS [95% CI] |
+|---|---|---|---|---|---|---|
+| 2018 | 0.8998 | 0.8994 | -0.0004 [-0.0042, +0.0032] | 0.1879 | 0.1878 | -0.0001 [-0.0012, +0.0009] |
+| 2019 | 0.9699 | 0.9755 | +0.0056 [-0.0059, +0.0192] | 0.1983 | 0.2005 | +0.0022 [-0.0016, +0.0066] |
+| 2020 | 1.0262 | 1.0225 | -0.0037 [-0.0088, +0.0018] | 0.2193 | 0.2178 | -0.0015 [-0.0031, +0.0001] |
+| 2021 | 0.9501 | 0.9521 | +0.0020 [-0.0037, +0.0077] | 0.1936 | 0.1943 | +0.0007 [-0.0011, +0.0025] |
+| 2022 | 1.0113 | 1.0026 | -0.0087 [-0.0182, +0.0001] | 0.2142 | 0.2110 | -0.0032 [-0.0063, -0.0001] |
+| 2023 | 0.9347 | 0.9272 | -0.0075 [-0.0183, +0.0032] | 0.1919 | 0.1894 | -0.0025 [-0.0061, +0.0010] |
+| 2024 | 0.9847 | 0.9806 | -0.0041 [-0.0079, -0.0004] | 0.2027 | 0.2015 | -0.0012 [-0.0024, -0.0001] |
+| 2025 | 1.0321 | 1.0298 | -0.0023 [-0.0054, +0.0009] | 0.2106 | 0.2098 | -0.0007 [-0.0018, +0.0003] |
+| 2026 (partial) | 1.0216 | 1.0209 | -0.0007 [-0.0154, +0.0178] | 0.1962 | 0.1959 | -0.0003 [-0.0041, +0.0043] |
+| **All** | 0.9768 | **0.9745** | −0.0024 [−0.0052, +0.0004] | 0.2022 | **0.2014** | −0.0008 [−0.0017, +0.0001] |
+| **2023/24–2025/26** | 0.9838 | **0.9792** | **−0.0046 [−0.0088, −0.0007]** | 0.2017 | **0.2002** | **−0.0015 [−0.0029, −0.0002]** |
+
+- **Decision:** accepted, with a caveat.
+  - It clears the bar on the pre-specified latest-three-full-seasons window (LL and RPS CIs both
+    exclude 0) and improves in 6 of 8 full seasons.
+  - Over all seasons the improvement is marginal: P(not better) is 0.049 for LL and 0.048 for RPS,
+    and the CIs just include 0.
+  - It also makes production deterministic: one fixed configuration instead of a weekly re-pick.
+- **Runtime:** `run_backtest.py` now takes ~3 min (70 walk-forwards on 8 cores).
+
+## E4 — Team-specific home advantage with shrinkage (rejected)
+
+- **Change:** each team gets a home-advantage deviation with a Gaussian penalty of precision τ ∈
+  {off, 3, 10, 30, 100, 300}, nested-selected.
+- **Result vs E3:** LL +0.0000 [−0.0005, +0.0006], RPS +0.0000 [−0.0002, +0.0002]; latest three
+  seasons LL −0.0001 [−0.0003, +0.0001].
+- **Why rejected:** no measurable effect. The fitted deviations are plausible (Villa, City and
+  Newcastle strongest at home), but with ~19 home games a season they are too noisy to beat the
+  pooled value.
+
+## E5 — Calibration layer (rejected, both variants)
+
+- **E5a, coherent:** shrink team effects toward the established-team average at prediction time,
+  factor k ∈ {0.85 … 1.1}, nested-selected. Because it still produces a Dixon–Coles grid, all
+  markets stay consistent. Result: LL +0.0004 [−0.0001, +0.0010], RPS +0.0001 [−0.0001, +0.0003].
+  The selection settles on k = 0.95.
+- **E5b, post-hoc temperature scaling of 1X2:** not scoreline-coherent, included for reference.
+  Temperature fitted on earlier seasons (0.94–1.06). Result: LL +0.0003 [−0.0003, +0.0009], RPS
+  +0.0001 [−0.0001, +0.0002].
+- **Why rejected:** after the E2 fixes the model is close to calibrated (in-sample T = 1.05), and a
+  walk-forward recalibration only adds estimation noise.
+
+## E6 — Partial pooling of all team effects (hierarchical MAP; rejected)
+
+- **Change:** a Gaussian (ridge) prior on every attack and defence effect, precision ∈ {0, 0.5, 1,
+  2, 5, 10}, nested-selected. This is the posterior mode of a hierarchical model with a common
+  team-effect variance. A full PyMC version was not run: it would need ~330 MCMC refits per
+  backtest and a heavy new dependency, and its point predictions differ from this MAP mainly
+  through posterior averaging.
+- **Result vs E3:** LL +0.0000 [−0.0008, +0.0008], RPS +0.0000 [−0.0002, +0.0002]; latest three
+  seasons LL +0.0011 [−0.0006, +0.0027].
+- **Why rejected:** the decay weights and promoted-team prior already provide the useful shrinkage.
+
+## E7 — Dynamic ratings: Gaussian random walk on attack/defence (rejected)
+
+- **Change:** `models/dynamic.py`. A state-space model fitted by MAP:
+  - Every team's attack and defence follow a random walk over 28-day blocks; the league scoring
+    level and home advantage follow stiffer walks (so, for example, the empty-stadium season is
+    absorbed).
+  - All matches count fully; there is no exponential decay.
+  - Steps across a season boundary can have extra variance (×1 or ×4) and mean reversion (φ = 1
+    or 0.85).
+  - Step precision ∈ {100, 300, 1000}. 12 configurations, nested-selected; promoted-team prior and
+    earlier-spell split as in production.
+- **Result vs E3:** LL +0.0005 [−0.0013, +0.0023], RPS −0.0000 [−0.0006, +0.0005]; latest three
+  seasons LL +0.0007 [−0.0018, +0.0033]. Only 2022/23 improves significantly.
+- **Why rejected:**
+  - No gain.
+  - Selection always went to the stiffest walk (precision 1000), and looser walks were clearly
+    worse (in-hindsight LL 0.980–0.983 at 100 vs 0.974 at 1000). The data favours slowly moving
+    ratings, which exponential decay already provides.
+  - Each backtest takes ~82 min vs seconds. The grid edge was not extended: the trend points back
+    to the static model.
+
+## E8 — Goal correlation: bivariate Poisson and Frank copula (rejected)
+
+- **Hypothesis:** the draw over-prediction in tight matches (top decile: predicted 0.315, observed
+  0.269) comes from the Dixon–Coles low-score correction; a different dependence structure could
+  fix it.
+- **Change:** keep the production model's expected goals, and replace the low-score correction
+  with (a) a bivariate Poisson with a shared component λ3, with marginal means preserved, or
+  (b) a Frank copula on the Poisson marginals. The single dependence parameter is fitted by
+  weighted MLE on the training data at every refit.
+- **Results vs E3:**
+  - Bivariate Poisson: LL −0.0008 [−0.0018, +0.0003], RPS −0.0000 [−0.0001, +0.0000]; latest
+    three seasons LL +0.0007 [−0.0008, +0.0022].
+  - Frank copula: LL −0.0005 [−0.0019, +0.0008], RPS −0.0000 [−0.0002, +0.0001]; latest three
+    seasons LL +0.0013 [−0.0003, +0.0030].
+- **Why rejected:**
+  - Neither clears the bar on either window.
+  - Both narrow the top-decile draw gap (to 0.299/0.275 and 0.296/0.259), but they lower the
+    average draw probability below the observed rate (0.228 and 0.225 vs 0.232), so the gains
+    cancel.
+  - The draw bias in tight games is not a dependence-structure problem. It more likely reflects
+    match context (motivation, absences), which is the Phase 3 feature work.
+
+## Phase 2 summary
+
+| Experiment | Decision | ΔLL vs production, all [95% CI] | ΔLL, 2023/24–2025/26 |
+|---|---|---|---|
+| E3 nested tuning (xi, prior strength) | **accepted** | −0.0024 [−0.0052, +0.0004] | **−0.0046 [−0.0088, −0.0007]** |
+| E4 team home advantage | rejected | +0.0000 [−0.0005, +0.0006] | −0.0001 [−0.0003, +0.0001] |
+| E5a coherent recalibration | rejected | +0.0004 [−0.0001, +0.0010] | +0.0003 [−0.0009, +0.0015] |
+| E5b 1X2 temperature scaling | rejected | +0.0003 [−0.0003, +0.0009] | +0.0002 [−0.0008, +0.0011] |
+| E6 partial pooling (hierarchical MAP) | rejected | +0.0000 [−0.0008, +0.0008] | +0.0011 [−0.0006, +0.0027] |
+| E7 dynamic random-walk ratings | rejected | +0.0005 [−0.0013, +0.0023] | +0.0007 [−0.0018, +0.0033] |
+| E8a bivariate Poisson | rejected | −0.0008 [−0.0018, +0.0003] | +0.0007 [−0.0008, +0.0022] |
+| E8b Frank copula | rejected | −0.0005 [−0.0019, +0.0008] | +0.0013 [−0.0003, +0.0030] |
+
+Production after Phase 2: E3. LL 0.9745, RPS 0.2014 (2018/19 → 2026/27).
+- **Gap to closing market:** about +0.018 LL.
+- **Conclusion:** the structure of the goal model is close to its ceiling. The remaining gap must
+  come from information the model does not have (Phase 3).
+- **Reproduction:** every experiment can be re-run with the scripts in `experiments/` (see its
+  README).

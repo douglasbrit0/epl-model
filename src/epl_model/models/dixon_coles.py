@@ -16,6 +16,40 @@ from epl_model.seasons import season_labels, season_start_year
 _PROMOTED_RATING_CACHE: dict[tuple, list[tuple[float, float]]] = {}
 
 
+def dc_terms(eta_h_raw: np.ndarray, eta_a_raw: np.ndarray, rho: float, design: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Per-match Dixon-Coles log-likelihood and its derivatives w.r.t. both log-rates and rho.
+
+    Log-rates are clipped to [-5, 4] (zero gradient outside). The low-score correction uses the
+    integer observed goals, not fractional xG targets; floored tau terms get zero gradient.
+    """
+    eta_h, eta_a = np.clip(eta_h_raw, -5, 4), np.clip(eta_a_raw, -5, 4)
+    lam, lam_a = np.exp(eta_h), np.exp(eta_a)
+    s00, s01, s10, s11 = design["s00"], design["s01"], design["s10"], design["s11"]
+    tau_raw = np.ones_like(lam)
+    tau_raw[s00] = 1 - lam[s00] * lam_a[s00] * rho
+    tau_raw[s01] = 1 + lam[s01] * rho
+    tau_raw[s10] = 1 + lam_a[s10] * rho
+    tau_raw[s11] = 1 - rho
+    live = tau_raw > 1e-9
+    tau = np.maximum(tau_raw, 1e-9)
+    ll = design["home_obs"] * eta_h - lam + design["away_obs"] * eta_a - lam_a - design["const"] + np.log(tau)
+    inv = np.where(live, 1 / tau, 0.0)
+    g_h = design["home_obs"] - lam
+    g_a = design["away_obs"] - lam_a
+    g_h[s00] -= lam[s00] * lam_a[s00] * rho * inv[s00]
+    g_a[s00] -= lam[s00] * lam_a[s00] * rho * inv[s00]
+    g_h[s01] += lam[s01] * rho * inv[s01]
+    g_a[s10] += lam_a[s10] * rho * inv[s10]
+    g_rho = np.zeros_like(lam)
+    g_rho[s00] = -lam[s00] * lam_a[s00] * inv[s00]
+    g_rho[s01] = lam[s01] * inv[s01]
+    g_rho[s10] = lam_a[s10] * inv[s10]
+    g_rho[s11] = -inv[s11]
+    g_h *= (eta_h_raw > -5) & (eta_h_raw < 4)
+    g_a *= (eta_a_raw > -5) & (eta_a_raw < 4)
+    return ll, g_h, g_a, g_rho
+
+
 @dataclass(frozen=True)
 class ScorelineForecast:
     """A fixture's normalized scoreline probability matrix and goal means."""
@@ -50,11 +84,24 @@ class DixonColesModel:
         alpha_candidates: Iterable[float] = (0.0, 0.25, 0.5, 0.75, 1.0),
         max_goals: int = 10,
         split_spells: bool = True,
+        prior_scale: float = 1.0,
+        home_shrink: float | None = None,
+        effect_ridge: float = 0.0,
+        effect_scale: float = 1.0,
     ) -> None:
         self.xi_candidates = tuple(xi_candidates)
         self.alpha_candidates = tuple(alpha_candidates)
         self.max_goals = max_goals
         self.split_spells = split_spells
+        self.prior_scale = prior_scale
+        # Experimental options (off by default): team-specific home advantage with a Gaussian
+        # penalty of this precision; ridge penalty on all team effects; shrinking team effects
+        # toward the established-team average at prediction time (a coherent recalibration).
+        self.home_shrink = home_shrink
+        self.effect_ridge = effect_ridge
+        self.effect_scale = effect_scale
+        self.home_delta: dict[str, float] = {}
+        self._centre = (0.0, 0.0)
         self.teams: list[str] = []
         self.attack: dict[str, float] = {}
         self.defence: dict[str, float] = {}
@@ -116,7 +163,9 @@ class DixonColesModel:
             prefix, tune = data, data.iloc[0:0]
         candidates = self.alpha_candidates if self._has_npxg(data) else (0.0,)
         best = (float("inf"), self.xi_candidates[0], candidates[0])
-        for xi in self.xi_candidates:
+        if len(self.xi_candidates) * len(candidates) == 1:
+            tune = None  # a single fixed configuration needs no selection
+        for xi in self.xi_candidates if tune is not None else ():
             for alpha in candidates:
                 if tune.empty:
                     loss = self._fit_objective(data, xi, alpha, initial=None)[0]
@@ -160,6 +209,13 @@ class DixonColesModel:
         rho = params[-1]
         return mu, home_adv, attack, defence, rho
 
+    def _home_deltas(self, params: np.ndarray) -> np.ndarray:
+        count = len(self.teams)
+        if self.home_shrink is None:
+            return np.zeros(count)
+        start = 2 + 2 * (count - 1)
+        return params[start : start + count]
+
     def _team_indices(self, rows: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
         index = {team: i for i, team in enumerate(self.teams)}
         home = rows["home"].map(index).fillna(-1).to_numpy(dtype=int)
@@ -171,8 +227,9 @@ class DixonColesModel:
         home, away = self._team_indices(rows)
         # Unknown teams (index -1) take the promoted-team prior.
         attack, defence = np.r_[attack, self._unseen[0]], np.r_[defence, self._unseen[1]]
+        deltas = np.r_[self._home_deltas(params), 0.0]
         return (
-            np.exp(np.clip(mu + home_adv + attack[home] - defence[away], -5, 4)),
+            np.exp(np.clip(mu + home_adv + deltas[home] + attack[home] - defence[away], -5, 4)),
             np.exp(np.clip(mu + attack[away] - defence[home], -5, 4)),
         )
 
@@ -262,36 +319,10 @@ class DixonColesModel:
         count = len(self.teams)
         mu, home_adv, attack, defence, rho = self._unpack(params)
         home, away, w = design["home"], design["away"], design["w"]
-        eta_h_raw = mu + home_adv + attack[home] - defence[away]
+        deltas = self._home_deltas(params)
+        eta_h_raw = mu + home_adv + deltas[home] + attack[home] - defence[away]
         eta_a_raw = mu + attack[away] - defence[home]
-        eta_h, eta_a = np.clip(eta_h_raw, -5, 4), np.clip(eta_a_raw, -5, 4)
-        lam, lam_a = np.exp(eta_h), np.exp(eta_a)
-        s00, s01, s10, s11 = design["s00"], design["s01"], design["s10"], design["s11"]
-        # The low-score correction is applied to integer observed goals, not fractional xG targets.
-        tau_raw = np.ones_like(lam)
-        tau_raw[s00] = 1 - lam[s00] * lam_a[s00] * rho
-        tau_raw[s01] = 1 + lam[s01] * rho
-        tau_raw[s10] = 1 + lam_a[s10] * rho
-        tau_raw[s11] = 1 - rho
-        live = tau_raw > 1e-9
-        tau = np.maximum(tau_raw, 1e-9)
-        ll = design["home_obs"] * eta_h - lam + design["away_obs"] * eta_a - lam_a - design["const"] + np.log(tau)
-
-        # d ll / d eta and d ll / d rho, with tau terms only where tau is not floored.
-        inv = np.where(live, 1 / tau, 0.0)
-        g_h = design["home_obs"] - lam
-        g_a = design["away_obs"] - lam_a
-        g_h[s00] -= lam[s00] * lam_a[s00] * rho * inv[s00]
-        g_a[s00] -= lam[s00] * lam_a[s00] * rho * inv[s00]
-        g_h[s01] += lam[s01] * rho * inv[s01]
-        g_a[s10] += lam_a[s10] * rho * inv[s10]
-        g_rho = np.zeros_like(lam)
-        g_rho[s00] = -lam[s00] * lam_a[s00] * inv[s00]
-        g_rho[s01] = lam[s01] * inv[s01]
-        g_rho[s10] = lam_a[s10] * inv[s10]
-        g_rho[s11] = -inv[s11]
-        g_h *= (eta_h_raw > -5) & (eta_h_raw < 4)
-        g_a *= (eta_a_raw > -5) & (eta_a_raw < 4)
+        ll, g_h, g_a, g_rho = dc_terms(eta_h_raw, eta_a_raw, rho, design)
         wg_h, wg_a = w * g_h, w * g_a
 
         g_attack = np.bincount(home, wg_h, count) + np.bincount(away, wg_a, count)
@@ -303,7 +334,20 @@ class DixonColesModel:
         grad[2 : 2 + count - 1] = g_attack[:-1] - g_attack[-1]
         grad[2 + count - 1 : 2 + 2 * (count - 1)] = g_defence[:-1] - g_defence[-1]
         grad[-1] = np.sum(w * g_rho)
+        if self.home_shrink is not None:
+            start = 2 + 2 * (count - 1)
+            grad[start : start + count] = np.bincount(home, wg_h, count)
         value, grad = float(-np.sum(w * ll)), -grad
+
+        if self.home_shrink is not None:
+            scale = self.home_shrink / design["weight_sum"]
+            value += 0.5 * scale * float(deltas @ deltas)
+            grad[start : start + count] += scale * deltas
+        if self.effect_ridge > 0:
+            scale = self.effect_ridge / design["weight_sum"]
+            for offset, effects in ((2, attack), (2 + count - 1, defence)):
+                value += 0.5 * scale * float(effects @ effects)
+                grad[offset : offset + count - 1] += scale * (effects[:-1] - effects[-1])
 
         penalty = design["penalty"]
         if penalty is not None and penalty["strength"] > 0 and len(penalty["newcomers"]):
@@ -327,7 +371,7 @@ class DixonColesModel:
         penalty = self._promotion_penalty(data, season)
         count = len(self.teams)
         if initial is None:
-            initial = np.zeros(2 + 2 * (count - 1) + 1)
+            initial = np.zeros(2 + 2 * (count - 1) + (count if self.home_shrink is not None else 0) + 1)
             initial[0] = np.log(max(0.2, (data["home_goals"].mean() + data["away_goals"].mean()) / 2))
             initial[1] = 0.2
         bounds = [(None, None)] * (len(initial) - 1) + [(-0.2, 0.2)]
@@ -345,12 +389,14 @@ class DixonColesModel:
         _, _, attack, defence, _ = self._unpack(result.x)
         if penalty is not None:
             established = penalty["established"]
+            self._centre = (float(attack[established].mean()), float(defence[established].mean()))
             self._unseen = (
                 float(attack[established].mean() + self.prior_delta[0]),
                 float(defence[established].mean() + self.prior_delta[1]),
             )
         else:
-            self._unseen = (0.0, 0.0)
+            self._centre = (float(attack.mean()), float(defence.mean()))
+            self._unseen = self._centre
         self.promoted_average = self._unseen
         return result.x
 
@@ -358,6 +404,7 @@ class DixonColesModel:
         self.mu, self.home_advantage, attack, defence, self.rho = self._unpack(params)
         self.attack = dict(zip(self.teams, attack, strict=True))
         self.defence = dict(zip(self.teams, defence, strict=True))
+        self.home_delta = dict(zip(self.teams, self._home_deltas(params), strict=True))
 
     def _mean_log_loss(self, data: pd.DataFrame, params: np.ndarray) -> float:
         """Scoreline log-loss on actual goals, so candidates with different xG blends are comparable."""
@@ -394,7 +441,7 @@ class DixonColesModel:
             values = np.array(ratings)
             self.prior_delta = (float(values[:, 0].mean()), float(values[:, 1].mean()))
             variance = float(np.mean(np.square(values - values.mean(axis=0))))
-            self.prior_strength = 1.0 / max(variance, 0.01)
+            self.prior_strength = self.prior_scale / max(variance, 0.01)
 
     def scoreline_matrix(self, home: str, away: str, max_goals: int | None = None) -> np.ndarray:
         """Return P(home goals, away goals), normalized on the requested grid."""
@@ -405,6 +452,11 @@ class DixonColesModel:
         home_def = self.defence.get(home, self._unseen[1])
         away_att = self.attack.get(away, self._unseen[0])
         away_def = self.defence.get(away, self._unseen[1])
+        if self.effect_scale != 1.0:
+            k, (centre_att, centre_def) = self.effect_scale, self._centre
+            home_att, away_att = centre_att + k * (home_att - centre_att), centre_att + k * (away_att - centre_att)
+            home_def, away_def = centre_def + k * (home_def - centre_def), centre_def + k * (away_def - centre_def)
+        home_att += self.home_delta.get(home, 0.0)
         # Same log-rate bounds as the likelihood, so sparse early fits cannot produce zero rates.
         home_rate = float(np.exp(np.clip(self.mu + self.home_advantage + home_att - away_def, -5, 4)))
         away_rate = float(np.exp(np.clip(self.mu + away_att - home_def, -5, 4)))

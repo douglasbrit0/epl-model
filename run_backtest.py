@@ -9,9 +9,10 @@ import pandas as pd
 
 from epl_model.data.cleaning import attach_optional_xg
 from epl_model.data.football_data import download_history, load_history
-from epl_model.evaluation.backtest import flat_stake_edges, flat_stake_profit, summarize_walk_forward, walk_forward
+from epl_model.evaluation.backtest import flat_stake_edges, flat_stake_profit, summarize_walk_forward
 from epl_model.evaluation.metrics import closing_odds_probabilities, reliability_bins
 from epl_model.data.names import normalize_match_teams
+from epl_model.evaluation.tuning import nested_select, run_grid, save_tuning
 from epl_model.pipeline import backtest_summary
 
 ROOT = Path(__file__).resolve().parent
@@ -23,7 +24,11 @@ def main() -> None:
     history = load_history(download_history(ROOT / "data" / "raw"))
     history = normalize_match_teams(history, "football_data")
     matches = attach_optional_xg(history, ROOT / "data" / "raw" / "understat_npxg.csv")
-    baseline = walk_forward(matches)
+    # Every grid configuration is backtested; each season uses the one that was best on earlier seasons.
+    grid = run_grid(matches)
+    baseline, chosen, production = nested_select(grid)
+    save_tuning(reports / "tuning.json", chosen, production)
+    print(f"Production config: {production}")
     baseline["flat_stake_profit"] = flat_stake_profit(baseline, threshold=0.02)
     baseline.to_csv(reports / "walk_forward.csv", index=False)
     (reports / "backtest_summary.json").write_text(json.dumps(backtest_summary(baseline), indent=2) + "\n", encoding="utf-8")

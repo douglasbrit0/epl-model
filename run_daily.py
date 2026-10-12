@@ -36,7 +36,7 @@ def main() -> None:
     full_season_fixtures = unplayed(full_season_fixtures, matches, season_start_year(now))
     ten_day_fixtures["kickoff_utc"] = pd.to_datetime(ten_day_fixtures["kickoff_utc"], utc=True)
     full_season_fixtures["kickoff_utc"] = pd.to_datetime(full_season_fixtures["kickoff_utc"], utc=True)
-    model = choose_validated_model(matches)
+    model = choose_validated_model(matches, ROOT / "reports" / "tuning.json")
     log_path = ROOT / "logs" / "prediction_log.jsonl"
     if log_path.exists():
         score_prediction_log(log_path, matches, ROOT / "logs" / "scored_predictions.jsonl")

@@ -13,5 +13,6 @@ reports/*.png
 reports/*.csv
 reports/*.json
 !reports/backtest_summary.json
+!reports/tuning.json
 reports/**/*.png
 reports/**/*.csv

@@ -1,0 +1,44 @@
+{
+  "production": {
+    "xi": 0.0025,
+    "prior_scale": 0.5
+  },
+  "chosen_by_season": {
+    "2018": {
+      "xi": 0.002,
+      "prior_scale": 1.0
+    },
+    "2019": {
+      "xi": 0.001,
+      "prior_scale": 0.0
+    },
+    "2020": {
+      "xi": 0.001,
+      "prior_scale": 0.5
+    },
+    "2021": {
+      "xi": 0.002,
+      "prior_scale": 0.5
+    },
+    "2022": {
+      "xi": 0.0015,
+      "prior_scale": 0.5
+    },
+    "2023": {
+      "xi": 0.0025,
+      "prior_scale": 0.5
+    },
+    "2024": {
+      "xi": 0.002,
+      "prior_scale": 0.5
+    },
+    "2025": {
+      "xi": 0.0025,
+      "prior_scale": 0.5
+    },
+    "2026": {
+      "xi": 0.0025,
+      "prior_scale": 0.5
+    }
+  }
+}

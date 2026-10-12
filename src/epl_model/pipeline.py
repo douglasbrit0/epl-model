@@ -15,33 +15,35 @@ from epl_model.seasons import season_start_year
 from epl_model.simulation.season import simulate_season
 
 
-def choose_validated_model(matches: pd.DataFrame, seed: int = 1729) -> DixonColesModel:
-    """Select goals-only vs xG-blended DC by a chronological held-out log-loss."""
+def choose_validated_model(matches: pd.DataFrame, tuning_path: Path = Path("reports/tuning.json")) -> DixonColesModel:
+    """Fit the production model with the decay and prior strength chosen by nested walk-forward tuning.
+
+    When an npxG export is present, the xG blend is still selected against goals-only on a
+    chronological held-out tail (log-loss on actual outcomes).
+    """
+    from epl_model.evaluation.tuning import load_production_config
+
+    config = load_production_config(tuning_path)
     data = matches.sort_values("kickoff_utc").reset_index(drop=True)
-    split = max(1, int(len(data) * 0.85))
-    validation = data.iloc[split:]
-    training = data.iloc[:split]
-    if len(training) < 100 or validation.empty:
-        raise ValueError("At least 100 training matches and a chronological validation tail are required")
-    cutoff = pd.to_datetime(validation["kickoff_utc"], utc=True).min()
-    specs = [("dc-goals", (0.0,))]
+    prediction_date = pd.Timestamp(datetime.now(timezone.utc).date(), tz="UTC")
+    alphas: tuple[float, ...] = (0.0,)
+    version = "dc-goals"
     if {"npxg_home", "npxg_away"}.issubset(data.columns) and data[["npxg_home", "npxg_away"]].notna().all().all():
-        specs.append(("dc-xg-blended", (0.0, 0.25, 0.5, 0.75, 1.0)))
-    scores = []
-    for version, alphas in specs:
-        model = DixonColesModel(xi_candidates=(0.0, 0.001, 0.002, 0.003, 0.005), alpha_candidates=alphas)
-        model.fit(training, cutoff)
-        forecasts = model.predict(validation)
-        losses = []
-        for row, forecast in zip(validation.to_dict("records"), forecasts, strict=True):
-            probabilities = outcome_probabilities(forecast.matrix)
-            outcome = 0 if row["home_goals"] > row["away_goals"] else 1 if row["home_goals"] == row["away_goals"] else 2
-            losses.append(-np.log(max(probabilities[outcome], 1e-12)))
-        scores.append((float(np.mean(losses)), version, alphas))
-    _, version, alphas = min(scores, key=lambda value: value[0])
-    prediction_date = datetime.now(timezone.utc).date()
-    final = DixonColesModel(alpha_candidates=alphas).fit(data, pd.Timestamp(prediction_date, tz="UTC"))
-    final.model_version = f"{version}-xi{final.xi:.4f}-alpha{final.alpha:.2f}"
+        split = max(1, int(len(data) * 0.85))
+        validation, training = data.iloc[split:], data.iloc[:split]
+        cutoff = pd.to_datetime(validation["kickoff_utc"], utc=True).min()
+        scores = []
+        for name, candidates in (("dc-goals", (0.0,)), ("dc-xg-blended", (0.0, 0.25, 0.5, 0.75, 1.0))):
+            model = DixonColesModel(xi_candidates=(config["xi"],), alpha_candidates=candidates, prior_scale=config["prior_scale"]).fit(training, cutoff)
+            losses = []
+            for row, forecast in zip(validation.to_dict("records"), model.predict(validation), strict=True):
+                probabilities = outcome_probabilities(forecast.matrix)
+                outcome = 0 if row["home_goals"] > row["away_goals"] else 1 if row["home_goals"] == row["away_goals"] else 2
+                losses.append(-np.log(max(probabilities[outcome], 1e-12)))
+            scores.append((float(np.mean(losses)), name, candidates))
+        _, version, alphas = min(scores, key=lambda value: value[0])
+    final = DixonColesModel(xi_candidates=(config["xi"],), alpha_candidates=alphas, prior_scale=config["prior_scale"]).fit(data, prediction_date)
+    final.model_version = f"{version}-xi{final.xi:.4f}-prior{config['prior_scale']:.3g}-alpha{final.alpha:.2f}"
     return final
 
 
