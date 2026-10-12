@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["generated_at", "model_version", "teams", "history"],
+  "properties": {
+    "generated_at": {"type": "string", "format": "date-time"}, "model_version": {"type": "string"},
+    "teams": {"type": "array", "items": {"$ref": "#/$defs/team"}},
+    "history": {"type": "array", "items": {"type": "object", "required": ["matchweek", "team", "p_title", "p_top4", "p_top6", "p_relegation", "exp_points"], "properties": {"matchweek": {"type": "integer"}, "team": {"type": "string"}, "p_title": {"type": "number"}, "p_top4": {"type": "number"}, "p_top6": {"type": "number"}, "p_relegation": {"type": "number"}, "exp_points": {"type": "number"}}, "additionalProperties": false}}
+  },
+  "$defs": {"team": {"type": "object", "required": ["team", "p_title", "p_top4", "p_top6", "p_relegation", "exp_points"], "properties": {"team": {"type": "string"}, "p_title": {"type": "number", "minimum": 0, "maximum": 1}, "p_top4": {"type": "number", "minimum": 0, "maximum": 1}, "p_top6": {"type": "number", "minimum": 0, "maximum": 1}, "p_relegation": {"type": "number", "minimum": 0, "maximum": 1}, "exp_points": {"type": "number", "minimum": 0}}, "additionalProperties": false}},
+  "additionalProperties": false
+}

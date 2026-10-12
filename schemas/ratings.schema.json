@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["generated_at", "model_version", "teams", "history"],
+  "properties": {
+    "generated_at": {"type": "string", "format": "date-time"},
+    "model_version": {"type": "string"},
+    "teams": {"type": "array", "items": {"$ref": "#/$defs/rating"}},
+    "history": {"type": "array", "items": {"type": "object", "required": ["date", "team", "attack", "defence", "overall"], "properties": {"date": {"type": "string", "format": "date"}, "team": {"type": "string"}, "attack": {"type": "number"}, "defence": {"type": "number"}, "overall": {"type": "number"}}, "additionalProperties": false}}
+  },
+  "$defs": {"rating": {"type": "object", "required": ["team", "attack", "defence", "overall"], "properties": {"team": {"type": "string"}, "attack": {"type": "number"}, "defence": {"type": "number"}, "overall": {"type": "number"}}, "additionalProperties": false}},
+  "additionalProperties": false
+}

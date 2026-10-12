@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["generated_at", "model_version", "rolling", "calibration_bins", "cumulative_flat_stake_pnl"],
+  "properties": {
+    "generated_at": {"type": "string", "format": "date-time"}, "model_version": {"type": "string"},
+    "rolling": {"type": "array", "items": {"type": "object", "required": ["window_end", "model_log_loss", "model_rps", "market_log_loss", "market_rps"], "properties": {"window_end": {"type": "string", "format": "date"}, "model_log_loss": {"type": ["number", "null"]}, "model_rps": {"type": ["number", "null"]}, "market_log_loss": {"type": ["number", "null"]}, "market_rps": {"type": ["number", "null"]}}, "additionalProperties": false}},
+    "calibration_bins": {"type": "array", "items": {"type": "object", "required": ["bin", "mean_probability", "observed_frequency", "count"], "properties": {"bin": {"type": "integer"}, "mean_probability": {"type": "number"}, "observed_frequency": {"type": "number"}, "count": {"type": "integer"}}, "additionalProperties": false}},
+    "cumulative_flat_stake_pnl": {"type": "number"}
+  },
+  "additionalProperties": false
+}

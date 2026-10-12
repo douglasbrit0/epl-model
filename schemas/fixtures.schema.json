@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["fixture_id", "kickoff_utc", "home", "away", "p_home", "p_draw", "p_away", "xg_home", "xg_away", "p_over_2_5", "p_btts", "top_scorelines", "scoreline_matrix"],
+    "properties": {
+      "fixture_id": {"type": "string", "minLength": 1},
+      "kickoff_utc": {"type": "string", "format": "date-time"},
+      "home": {"type": "string"}, "away": {"type": "string"},
+      "p_home": {"type": "number", "minimum": 0, "maximum": 1},
+      "p_draw": {"type": "number", "minimum": 0, "maximum": 1},
+      "p_away": {"type": "number", "minimum": 0, "maximum": 1},
+      "xg_home": {"type": "number", "minimum": 0}, "xg_away": {"type": "number", "minimum": 0},
+      "p_over_2_5": {"type": "number", "minimum": 0, "maximum": 1}, "p_btts": {"type": "number", "minimum": 0, "maximum": 1},
+      "top_scorelines": {"type": "array", "minItems": 5, "maxItems": 5, "items": {"type": "object", "required": ["home_goals", "away_goals", "probability"], "properties": {"home_goals": {"type": "integer", "minimum": 0}, "away_goals": {"type": "integer", "minimum": 0}, "probability": {"type": "number", "minimum": 0, "maximum": 1}}, "additionalProperties": false}},
+      "scoreline_matrix": {"type": "array", "minItems": 7, "maxItems": 7, "items": {"type": "array", "minItems": 7, "maxItems": 7, "items": {"type": "number", "minimum": 0}}},
+      "market_p_home": {"type": "number", "minimum": 0, "maximum": 1}, "market_p_draw": {"type": "number", "minimum": 0, "maximum": 1}, "market_p_away": {"type": "number", "minimum": 0, "maximum": 1},
+      "edge_home": {"type": "number"}, "edge_draw": {"type": "number"}, "edge_away": {"type": "number"}, "odds_source": {"type": "string"}
+    },
+    "additionalProperties": false
+  }
+}
