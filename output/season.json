@@ -1,166 +1,166 @@
 {
-  "generated_at": "2026-10-12T22:42:51.612626Z",
+  "generated_at": "2026-10-13T13:02:16.369022Z",
   "model_version": "dc-goals-xi0.0025-prior0.5-alpha0.00",
   "teams": [
     {
       "team": "Manchester City",
-      "p_title": 0.5975,
-      "p_top4": 0.9951,
-      "p_top6": 0.9996,
+      "p_title": 0.6781,
+      "p_top4": 0.9984,
+      "p_top6": 0.9999,
       "p_relegation": 0.0,
-      "exp_points": 81.6797
+      "exp_points": 84.2686
     },
     {
       "team": "Arsenal",
-      "p_title": 0.3722,
-      "p_top4": 0.9864,
-      "p_top6": 0.9981,
+      "p_title": 0.3068,
+      "p_top4": 0.9909,
+      "p_top6": 0.999,
       "p_relegation": 0.0,
-      "exp_points": 78.8276
-    },
-    {
-      "team": "Liverpool",
-      "p_title": 0.0168,
-      "p_top4": 0.6219,
-      "p_top6": 0.8296,
-      "p_relegation": 0.0,
-      "exp_points": 64.8006
+      "exp_points": 79.7667
     },
     {
       "team": "Brighton",
-      "p_title": 0.0095,
-      "p_top4": 0.4712,
-      "p_top6": 0.73,
-      "p_relegation": 0.0005,
-      "exp_points": 61.9619
+      "p_title": 0.0113,
+      "p_top4": 0.6538,
+      "p_top6": 0.8624,
+      "p_relegation": 0.0002,
+      "exp_points": 64.503
     },
     {
-      "team": "Brentford",
-      "p_title": 0.002,
-      "p_top4": 0.2227,
-      "p_top6": 0.478,
-      "p_relegation": 0.0027,
-      "exp_points": 57.3772
+      "team": "Liverpool",
+      "p_title": 0.0026,
+      "p_top4": 0.4826,
+      "p_top6": 0.7569,
+      "p_relegation": 0.0008,
+      "exp_points": 61.9166
     },
     {
       "team": "Chelsea",
-      "p_title": 0.0003,
-      "p_top4": 0.14,
-      "p_top6": 0.3486,
-      "p_relegation": 0.0073,
-      "exp_points": 55.2929
+      "p_title": 0.0005,
+      "p_top4": 0.2605,
+      "p_top6": 0.5567,
+      "p_relegation": 0.0034,
+      "exp_points": 58.067
     },
     {
-      "team": "Newcastle United",
-      "p_title": 0.0006,
-      "p_top4": 0.1427,
-      "p_top6": 0.3531,
-      "p_relegation": 0.0081,
-      "exp_points": 55.2124
+      "team": "Brentford",
+      "p_title": 0.0005,
+      "p_top4": 0.2157,
+      "p_top6": 0.4976,
+      "p_relegation": 0.004,
+      "exp_points": 56.8623
     },
     {
       "team": "Leeds United",
-      "p_title": 0.0004,
-      "p_top4": 0.1224,
-      "p_top6": 0.3162,
-      "p_relegation": 0.009,
-      "exp_points": 54.5742
+      "p_title": 0.0,
+      "p_top4": 0.1215,
+      "p_top6": 0.3238,
+      "p_relegation": 0.0135,
+      "exp_points": 53.7985
     },
     {
       "team": "Manchester United",
-      "p_title": 0.0004,
-      "p_top4": 0.1246,
-      "p_top6": 0.3198,
-      "p_relegation": 0.0114,
-      "exp_points": 54.3635
+      "p_title": 0.0002,
+      "p_top4": 0.0959,
+      "p_top6": 0.281,
+      "p_relegation": 0.0211,
+      "exp_points": 52.8326
+    },
+    {
+      "team": "Newcastle United",
+      "p_title": 0.0,
+      "p_top4": 0.0555,
+      "p_top6": 0.1822,
+      "p_relegation": 0.0303,
+      "exp_points": 50.9564
     },
     {
       "team": "Everton",
       "p_title": 0.0,
-      "p_top4": 0.0457,
-      "p_top6": 0.1484,
-      "p_relegation": 0.0287,
-      "exp_points": 50.358
+      "p_top4": 0.0428,
+      "p_top6": 0.1559,
+      "p_relegation": 0.0378,
+      "exp_points": 50.1154
     },
     {
       "team": "Aston Villa",
-      "p_title": 0.0001,
-      "p_top4": 0.0422,
-      "p_top6": 0.1492,
-      "p_relegation": 0.0424,
-      "exp_points": 50.1463
+      "p_title": 0.0,
+      "p_top4": 0.0374,
+      "p_top6": 0.1456,
+      "p_relegation": 0.0533,
+      "exp_points": 49.556
     },
     {
       "team": "Bournemouth",
-      "p_title": 0.0001,
-      "p_top4": 0.0433,
-      "p_top6": 0.1425,
-      "p_relegation": 0.044,
-      "exp_points": 49.8316
-    },
-    {
-      "team": "Nottingham Forest",
-      "p_title": 0.0001,
-      "p_top4": 0.0183,
-      "p_top6": 0.0758,
-      "p_relegation": 0.0726,
-      "exp_points": 47.4155
+      "p_title": 0.0,
+      "p_top4": 0.0131,
+      "p_top6": 0.0714,
+      "p_relegation": 0.1114,
+      "exp_points": 46.4834
     },
     {
       "team": "Hull City",
       "p_title": 0.0,
-      "p_top4": 0.0105,
-      "p_top6": 0.0427,
-      "p_relegation": 0.1129,
-      "exp_points": 45.6241
+      "p_top4": 0.0096,
+      "p_top6": 0.0444,
+      "p_relegation": 0.1372,
+      "exp_points": 45.276
     },
     {
-      "team": "Sunderland",
+      "team": "Nottingham Forest",
       "p_title": 0.0,
-      "p_top4": 0.0049,
-      "p_top6": 0.0261,
-      "p_relegation": 0.1792,
-      "exp_points": 43.6376
-    },
-    {
-      "team": "Fulham",
-      "p_title": 0.0,
-      "p_top4": 0.0039,
-      "p_top6": 0.0206,
-      "p_relegation": 0.2147,
-      "exp_points": 42.4967
+      "p_top4": 0.009,
+      "p_top6": 0.0497,
+      "p_relegation": 0.1429,
+      "exp_points": 45.0903
     },
     {
       "team": "Crystal Palace",
       "p_title": 0.0,
-      "p_top4": 0.0027,
-      "p_top6": 0.0151,
-      "p_relegation": 0.2569,
-      "exp_points": 41.9958
+      "p_top4": 0.008,
+      "p_top6": 0.0383,
+      "p_relegation": 0.1658,
+      "exp_points": 44.5092
+    },
+    {
+      "team": "Sunderland",
+      "p_title": 0.0,
+      "p_top4": 0.002,
+      "p_top6": 0.013,
+      "p_relegation": 0.3118,
+      "exp_points": 41.0063
+    },
+    {
+      "team": "Fulham",
+      "p_title": 0.0,
+      "p_top4": 0.0012,
+      "p_top6": 0.0108,
+      "p_relegation": 0.3672,
+      "exp_points": 39.9656
     },
     {
       "team": "Tottenham Hotspur",
       "p_title": 0.0,
-      "p_top4": 0.0014,
-      "p_top6": 0.0065,
-      "p_relegation": 0.3932,
-      "exp_points": 39.3194
+      "p_top4": 0.0012,
+      "p_top6": 0.0064,
+      "p_relegation": 0.4192,
+      "exp_points": 39.3088
     },
     {
       "team": "Ipswich Town",
       "p_title": 0.0,
-      "p_top4": 0.0001,
-      "p_top6": 0.0001,
-      "p_relegation": 0.6798,
-      "exp_points": 34.8655
+      "p_top4": 0.0006,
+      "p_top6": 0.0039,
+      "p_relegation": 0.5229,
+      "exp_points": 37.8425
     },
     {
       "team": "Coventry City",
       "p_title": 0.0,
-      "p_top4": 0.0,
-      "p_top6": 0.0,
-      "p_relegation": 0.9366,
-      "exp_points": 27.9437
+      "p_top4": 0.0003,
+      "p_top6": 0.0011,
+      "p_relegation": 0.6572,
+      "exp_points": 35.5085
     }
   ],
   "history": [
@@ -343,6 +343,186 @@
       "p_top6": 0.0,
       "p_relegation": 0.9366,
       "exp_points": 27.9437
+    },
+    {
+      "matchweek": 6,
+      "team": "Manchester City",
+      "p_title": 0.6781,
+      "p_top4": 0.9984,
+      "p_top6": 0.9999,
+      "p_relegation": 0.0,
+      "exp_points": 84.2686
+    },
+    {
+      "matchweek": 6,
+      "team": "Arsenal",
+      "p_title": 0.3068,
+      "p_top4": 0.9909,
+      "p_top6": 0.999,
+      "p_relegation": 0.0,
+      "exp_points": 79.7667
+    },
+    {
+      "matchweek": 6,
+      "team": "Brighton",
+      "p_title": 0.0113,
+      "p_top4": 0.6538,
+      "p_top6": 0.8624,
+      "p_relegation": 0.0002,
+      "exp_points": 64.503
+    },
+    {
+      "matchweek": 6,
+      "team": "Liverpool",
+      "p_title": 0.0026,
+      "p_top4": 0.4826,
+      "p_top6": 0.7569,
+      "p_relegation": 0.0008,
+      "exp_points": 61.9166
+    },
+    {
+      "matchweek": 6,
+      "team": "Chelsea",
+      "p_title": 0.0005,
+      "p_top4": 0.2605,
+      "p_top6": 0.5567,
+      "p_relegation": 0.0034,
+      "exp_points": 58.067
+    },
+    {
+      "matchweek": 6,
+      "team": "Brentford",
+      "p_title": 0.0005,
+      "p_top4": 0.2157,
+      "p_top6": 0.4976,
+      "p_relegation": 0.004,
+      "exp_points": 56.8623
+    },
+    {
+      "matchweek": 6,
+      "team": "Leeds United",
+      "p_title": 0.0,
+      "p_top4": 0.1215,
+      "p_top6": 0.3238,
+      "p_relegation": 0.0135,
+      "exp_points": 53.7985
+    },
+    {
+      "matchweek": 6,
+      "team": "Manchester United",
+      "p_title": 0.0002,
+      "p_top4": 0.0959,
+      "p_top6": 0.281,
+      "p_relegation": 0.0211,
+      "exp_points": 52.8326
+    },
+    {
+      "matchweek": 6,
+      "team": "Newcastle United",
+      "p_title": 0.0,
+      "p_top4": 0.0555,
+      "p_top6": 0.1822,
+      "p_relegation": 0.0303,
+      "exp_points": 50.9564
+    },
+    {
+      "matchweek": 6,
+      "team": "Everton",
+      "p_title": 0.0,
+      "p_top4": 0.0428,
+      "p_top6": 0.1559,
+      "p_relegation": 0.0378,
+      "exp_points": 50.1154
+    },
+    {
+      "matchweek": 6,
+      "team": "Aston Villa",
+      "p_title": 0.0,
+      "p_top4": 0.0374,
+      "p_top6": 0.1456,
+      "p_relegation": 0.0533,
+      "exp_points": 49.556
+    },
+    {
+      "matchweek": 6,
+      "team": "Bournemouth",
+      "p_title": 0.0,
+      "p_top4": 0.0131,
+      "p_top6": 0.0714,
+      "p_relegation": 0.1114,
+      "exp_points": 46.4834
+    },
+    {
+      "matchweek": 6,
+      "team": "Hull City",
+      "p_title": 0.0,
+      "p_top4": 0.0096,
+      "p_top6": 0.0444,
+      "p_relegation": 0.1372,
+      "exp_points": 45.276
+    },
+    {
+      "matchweek": 6,
+      "team": "Nottingham Forest",
+      "p_title": 0.0,
+      "p_top4": 0.009,
+      "p_top6": 0.0497,
+      "p_relegation": 0.1429,
+      "exp_points": 45.0903
+    },
+    {
+      "matchweek": 6,
+      "team": "Crystal Palace",
+      "p_title": 0.0,
+      "p_top4": 0.008,
+      "p_top6": 0.0383,
+      "p_relegation": 0.1658,
+      "exp_points": 44.5092
+    },
+    {
+      "matchweek": 6,
+      "team": "Sunderland",
+      "p_title": 0.0,
+      "p_top4": 0.002,
+      "p_top6": 0.013,
+      "p_relegation": 0.3118,
+      "exp_points": 41.0063
+    },
+    {
+      "matchweek": 6,
+      "team": "Fulham",
+      "p_title": 0.0,
+      "p_top4": 0.0012,
+      "p_top6": 0.0108,
+      "p_relegation": 0.3672,
+      "exp_points": 39.9656
+    },
+    {
+      "matchweek": 6,
+      "team": "Tottenham Hotspur",
+      "p_title": 0.0,
+      "p_top4": 0.0012,
+      "p_top6": 0.0064,
+      "p_relegation": 0.4192,
+      "exp_points": 39.3088
+    },
+    {
+      "matchweek": 6,
+      "team": "Ipswich Town",
+      "p_title": 0.0,
+      "p_top4": 0.0006,
+      "p_top6": 0.0039,
+      "p_relegation": 0.5229,
+      "exp_points": 37.8425
+    },
+    {
+      "matchweek": 6,
+      "team": "Coventry City",
+      "p_title": 0.0,
+      "p_top4": 0.0003,
+      "p_top6": 0.0011,
+      "p_relegation": 0.6572,
+      "exp_points": 35.5085
     }
   ]
 }
