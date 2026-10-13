@@ -8,6 +8,7 @@ import pandas as pd
 from epl_model.data.cleaning import attach_optional_xg
 from epl_model.data.football_data import download_history, load_history
 from epl_model.data.fpl import take_snapshot
+from epl_model.data.odds_api import take_odds_snapshot
 from epl_model.data.football_data_org import season_fixtures, unplayed, upcoming_fixtures
 from epl_model.data.names import normalize_match_teams
 from epl_model.data.storage import save_matches
@@ -23,6 +24,7 @@ def main() -> None:
     """Run daily production steps; failure before publish leaves prior output intact."""
     # Snapshot player availability first: it builds point-in-time history and never blocks the run.
     take_snapshot(ROOT / "logs" / "fpl_snapshots")
+    take_odds_snapshot(ROOT / "logs" / "odds_snapshots")
     raw = ROOT / "data" / "raw"
     processed = ROOT / "data" / "processed"
     history_paths = download_history(raw)

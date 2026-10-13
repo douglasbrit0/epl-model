@@ -35,9 +35,11 @@ jobs:
               cp "/tmp/$file" "logs/$file"
             fi
           done
-          if git cat-file -e origin/data:logs/fpl_snapshots 2>/dev/null; then
-            git archive origin/data logs/fpl_snapshots | tar -x
-          fi
+          for dir in fpl_snapshots odds_snapshots; do
+            if git cat-file -e "origin/data:logs/$dir" 2>/dev/null; then
+              git archive origin/data "logs/$dir" | tar -x
+            fi
+          done
           mkdir -p output
           for file in latest.json fixtures.json ratings.json season.json performance.json; do
             if git show "origin/data:output/$file" > "output/$file" 2>/dev/null; then
@@ -58,6 +60,7 @@ jobs:
       - name: Generate validated snapshot
         env:
           FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python run_daily.py

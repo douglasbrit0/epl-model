@@ -9,6 +9,10 @@ A standalone Python model and daily data pipeline for Premier League scoreline d
 - xG is optional and the model runs goals-only by default. Understat's robots.txt disallows crawling, so no scraper is included. If you have a permitted npxG export, put it at `data/raw/understat_npxg.csv` (`kickoff_utc,home,away,npxg_home,npxg_away`) or provide its URL through the `UNDERSTAT_NPXG_URL` Actions secret; when present it must join every historical match. Without it, runs log a warning and continue goals-only.
 - The football-data.org fixture endpoint does not provide future closing odds. Market fields are emitted only when odds are actually present in the fixture input; no odds source is invented.
 
+- Each daily run first saves two timestamped, append-only snapshots on the `data` branch under `logs/`. Neither is used by the model yet, and a failure in either only logs a warning:
+  - FPL player availability (status, chance of playing, injury news) from the public bootstrap-static API, in `logs/fpl_snapshots/`.
+  - When the `ODDS_API_KEY` secret is set, bookmaker 1X2 and Over/Under prices for the EPL and Championship from The Odds API (UK and EU regions, including Pinnacle), in `logs/odds_snapshots/`. This uses about 8 of the free tier's 500 monthly credits per run.
+
 The sources' exact team names are normalized through `data/team_name_map.csv`. Unknown teams and unmatched xG records raise errors. Raw CSVs and xG exports belong in `data/raw/`; processed match data is parquet under `data/processed/`.
 
 ## Setup
