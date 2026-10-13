@@ -102,6 +102,8 @@ class DixonColesModel:
         self.effect_scale = effect_scale
         self.home_delta: dict[str, float] = {}
         self._centre = (0.0, 0.0)
+        # Optional per-team fallback ratings for teams with no data (default: the single prior).
+        self._unseen_by_team: dict[str, tuple[float, float]] = {}
         self.teams: list[str] = []
         self.attack: dict[str, float] = {}
         self.defence: dict[str, float] = {}
@@ -350,16 +352,18 @@ class DixonColesModel:
                 grad[offset : offset + count - 1] += scale * (effects[:-1] - effects[-1])
 
         penalty = design["penalty"]
-        if penalty is not None and penalty["strength"] > 0 and len(penalty["newcomers"]):
+        if penalty is not None and np.any(np.asarray(penalty["strength"]) > 0) and len(penalty["newcomers"]):
             # Gaussian prior on newcomers, in total-weight units so recent matches count ~1 each.
             scale = penalty["strength"] / design["weight_sum"]
             new, est = penalty["newcomers"], penalty["established"]
             for offset, effects, delta in ((2, attack, penalty["delta"][0]), (2 + count - 1, defence, penalty["delta"][1])):
+                # delta and strength may be scalars or per-newcomer arrays (e.g. separate priors
+                # for clubs arriving from the league above and below).
                 residual = effects[new] - effects[est].mean() - delta
-                value += 0.5 * scale * float(residual @ residual)
+                value += 0.5 * float(np.sum(scale * residual * residual))
                 g_effects = np.zeros(count)
                 g_effects[new] += scale * residual
-                g_effects[est] -= scale * residual.sum() / len(est)
+                g_effects[est] -= np.sum(scale * residual) / len(est)
                 grad[offset : offset + count - 1] += g_effects[:-1] - g_effects[-1]
         return value, grad
 
@@ -448,10 +452,12 @@ class DixonColesModel:
         if not self.attack:
             raise RuntimeError("Fit the model before predicting")
         # Promoted teams use their shrunk fitted effects; teams never seen use the prior.
-        home_att = self.attack.get(home, self._unseen[0])
-        home_def = self.defence.get(home, self._unseen[1])
-        away_att = self.attack.get(away, self._unseen[0])
-        away_def = self.defence.get(away, self._unseen[1])
+        home_unseen = self._unseen_by_team.get(home, self._unseen)
+        away_unseen = self._unseen_by_team.get(away, self._unseen)
+        home_att = self.attack.get(home, home_unseen[0])
+        home_def = self.defence.get(home, home_unseen[1])
+        away_att = self.attack.get(away, away_unseen[0])
+        away_def = self.defence.get(away, away_unseen[1])
         if self.effect_scale != 1.0:
             k, (centre_att, centre_def) = self.effect_scale, self._centre
             home_att, away_att = centre_att + k * (home_att - centre_att), centre_att + k * (away_att - centre_att)

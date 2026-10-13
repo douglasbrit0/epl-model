@@ -64,7 +64,8 @@ def test_walk_forward_holds_out_complete_week_before_prediction():
             return self
 
         def predict(self, fixtures):
-            return [type("Forecast", (), {"matrix": np.array([[0.2, 0.2], [0.3, 0.3]])})() for _ in range(len(fixtures))]
+            forecast = {"matrix": np.array([[0.2, 0.2], [0.3, 0.3]]), "xg_home": 0.6, "xg_away": 0.5}
+            return [type("Forecast", (), forecast)() for _ in range(len(fixtures))]
 
     matches = sample_matches()
     matches["fixture_id"] = [f"fixture-{index}" for index in matches.index]

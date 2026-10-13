@@ -243,3 +243,80 @@ Production after Phase 2: E3. LL 0.9745, RPS 0.2014 (2018/19 → 2026/27).
   come from information the model does not have (Phase 3).
 - **Reproduction:** every experiment can be re-run with the scripts in `experiments/` (see its
   README).
+
+---
+
+# Market-efficiency tests (can any strategy beat the betting market?)
+
+Scripts: `experiments/market_tests.py`, `experiments/championship.py`, `experiments/line_shopping.py`.
+Prices are Pinnacle pre-match (`PSH…`, collected days before kickoff) and closing (`PSCH…`), with
+market-average and Bet365 fallbacks; Over/Under uses `P>2.5`/`PC>2.5`. Blends are fitted only on
+seasons before the one evaluated. P&L is per 1-unit stake, with a block bootstrap by matchweek.
+CLV = log(price taken / Pinnacle closing price); positive means the price moved our way.
+
+## M1 — Does the model add information to the market? (EPL 1X2: no)
+
+- **Test:** walk-forward conditional-logit blend, score = a·log p_market + b·log p_model + c.
+- **Model weight b by season** (fitted on earlier seasons): 0.30, 0.36, 0.22, 0.17, 0.04, −0.00,
+  0.00, −0.01. It fell to zero from 2023 on.
+- **Out of sample:** the blend is worse than the market alone.
+  - vs closing: LL +0.0039 [+0.0008, +0.0070], RPS +0.0009 [+0.0003, +0.0015].
+  - vs pre-match: LL +0.0038 [+0.0008, +0.0069].
+
+## M2 — Betting before the line moves (EPL 1X2: loses)
+
+- Flat stakes at the Pinnacle pre-match price when expected value clears 0/2/5%.
+  - Blend: ROI −6.0% / −5.0% / −3.3%; CLV −0.6% / −0.4% / −0.2%.
+  - Model only: ROI −1.6% / −1.8% / −2.8%; CLV −0.4% / −0.4% / −0.3%.
+- All P&L CIs include 0, but every CLV is negative: the market moves against these bets.
+
+## M3 — Over/Under 2.5 (EPL: no edge)
+
+- **Blend:** model weight 0.07–0.27, but the blend doesn't beat the market out of sample (LL vs
+  closing +0.0017 [−0.0001, +0.0035]).
+- **Bets:** ROI −0.4% to −5%; CLV about 0.
+
+## M4 — Championship (E1), same model with two-way newcomer priors (no edge)
+
+- **Setup:** nested-tuned (production xi 0.002, prior_scale 0.5). Clubs relegated from the Premier
+  League get their own prior (+0.18 attack, +0.17 defence vs the Championship average); League One
+  promotees get theirs (−0.10, −0.14). Relegation status comes from the previous season's EPL table.
+- **1X2:** model LL 1.0534 vs closing market 1.0375. Model weight in the blend is negative in every
+  season (−0.02 to −0.19). Blend vs closing: LL +0.0015 [+0.0002, +0.0027].
+- **Bets:**
+  - 1X2: ROI −4% to −13%, CLV −0.7% to −1.2%.
+  - Over/Under: ROI −3.5% to −10%. One cell, the blend at EV > 5%, made +20% ROI, but on only
+    44 bets [−3.4, +21.8 units] with CLV −1.8%. It is one of 12 strategies tried: noise.
+- The Championship market is, if anything, less beatable by this model than the EPL.
+
+## M5 — Line shopping against Pinnacle, no model (inconclusive with this data)
+
+- **Rule:** bet the best available pre-match price (football-data `Max*`) when it beats
+  Pinnacle's de-vigged pre-match price by the threshold.
+
+| | Edge > 0% | > 2% | > 4% | > 6% |
+|---|---|---|---|---|
+| EPL ROI (bets) | +0.9% (2,792) | −1.7% (690) | +15.7% (209) | +36.7% (77) |
+| EPL mean CLV | +3.9% | +6.7% | +11.3% | +16.1% |
+| Championship ROI (bets) | −3.9% (2,435) | −1.3% (550) | −20.1% (116) | −46.8% (23) |
+| Championship mean CLV | +3.6% | +5.5% | +7.8% | +9.2% |
+
+- **Every P&L CI includes 0.** CLV this large alongside losses in the Championship suggests many
+  `Max*` quotes were not really available: stale lines, palpable errors that would be voided, or
+  exchange prices before commission.
+- **Verdict:** this approach is the only one tested that gets positive CLV. It cannot be validated
+  on football-data's best-price column; it needs timestamped quotes from bookmakers you can actually
+  bet with. Bookmakers also restrict accounts that do this.
+
+## Conclusion
+
+A goals-based model, however well tuned, carries no information that the EPL or Championship
+1X2/totals markets lack. Feature work that only re-derives public information (form, rest,
+injuries already in the news) is unlikely to change that.
+
+Routes that could produce an edge, all needing new data:
+1. **Timing:** bet before the market prices team news (needs timestamped odds and a news/lineup feed).
+2. **Line shopping** with verified, timestamped soft-book prices (M5).
+3. **Genuinely private information or modelling:** e.g. tracking-data models.
+
+None is achievable with the free data currently in the repo.

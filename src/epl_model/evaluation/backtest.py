@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from epl_model.evaluation.metrics import closing_odds_probabilities, multiclass_scores, outcome_probabilities
+from epl_model.evaluation.metrics import closing_odds_probabilities, multiclass_scores, outcome_probabilities, score_probabilities
 from epl_model.models import DixonColesModel
 from epl_model.seasons import season_labels
 
@@ -37,6 +37,7 @@ def walk_forward(matches: pd.DataFrame, model_factory=DixonColesModel) -> pd.Dat
         forecasts = model.predict(group)
         for fixture, forecast in zip(group.to_dict("records"), forecasts, strict=True):
             probs = outcome_probabilities(forecast.matrix)
+            markets = score_probabilities(forecast.matrix)
             outcome = 0 if fixture["home_goals"] > fixture["away_goals"] else 1 if fixture["home_goals"] == fixture["away_goals"] else 2
             record = {
                 "fixture_id": fixture["fixture_id"],
@@ -45,6 +46,14 @@ def walk_forward(matches: pd.DataFrame, model_factory=DixonColesModel) -> pd.Dat
                 "p_home": probs[0],
                 "p_draw": probs[1],
                 "p_away": probs[2],
+                "p_over_2_5": markets["p_over_2_5"],
+                "p_btts": markets["p_btts"],
+                "xg_home": forecast.xg_home,
+                "xg_away": forecast.xg_away,
+                "home": fixture["home"],
+                "away": fixture["away"],
+                "home_goals": fixture["home_goals"],
+                "away_goals": fixture["away_goals"],
                 "season": int(season),
                 "matchweek": int(week),
                 "fit_data_through": model.training_max_date.isoformat(),
