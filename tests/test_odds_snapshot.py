@@ -45,3 +45,25 @@ def test_snapshot_writes_one_file_per_run(tmp_path, monkeypatch):
     loaded = odds_api.load_odds_snapshots(tmp_path)
     assert path.name == "odds_20261013T060000Z.csv.gz"
     assert set(loaded["sport"]) == {"soccer_epl", "soccer_efl_champ"}
+
+
+def test_market_odds_attach_pinnacle_prices_by_teams_and_date(tmp_path, monkeypatch):
+    import pandas as pd
+
+    soft = {"key": "skybet", "markets": [{"key": "h2h", "outcomes": [
+        {"name": "Brighton and Hove Albion", "price": 2.2}, {"name": "Arsenal", "price": 3.1}, {"name": "Draw", "price": 3.4}]}]}
+    pinnacle = {"key": "pinnacle", "markets": [{"key": "h2h", "outcomes": [
+        {"name": "Brighton and Hove Albion", "price": 2.1}, {"name": "Arsenal", "price": 3.3}, {"name": "Draw", "price": 3.5}]}]}
+    event = {"id": "e1", "commence_time": "2026-10-18T13:00:00Z", "home_team": "Brighton and Hove Albion", "away_team": "Arsenal",
+             "bookmakers": [soft, pinnacle]}
+    monkeypatch.setenv("ODDS_API_KEY", "x")
+    monkeypatch.setattr(odds_api, "fetch_odds", lambda sport, key: ([event], "490"))
+    path = odds_api.take_odds_snapshot(tmp_path, sports=("soccer_epl",))
+    fixtures = pd.DataFrame([
+        {"fixture_id": "fdo:1", "kickoff_utc": "2026-10-18T13:00:00Z", "home": "Brighton", "away": "Arsenal"},
+        {"fixture_id": "fdo:2", "kickoff_utc": "2026-10-18T15:00:00Z", "home": "Chelsea", "away": "Fulham"},
+    ])
+    out = odds_api.attach_market_odds(fixtures, path)
+    assert out.loc[0, ["odds_home", "odds_draw", "odds_away"]].tolist() == [2.1, 3.5, 3.3]
+    assert out.loc[0, "odds_source"] == "pinnacle"
+    assert pd.isna(out.loc[1, "odds_home"])

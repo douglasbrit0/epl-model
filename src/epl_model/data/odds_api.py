@@ -16,6 +16,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import requests
 
@@ -99,3 +100,47 @@ def load_odds_snapshots(directory: Path) -> pd.DataFrame:
     if not paths:
         return pd.DataFrame(columns=COLUMNS)
     return pd.concat([pd.read_csv(path) for path in paths], ignore_index=True)
+
+
+def match_odds(snapshot: pd.DataFrame, sport: str = "soccer_epl") -> pd.DataFrame:
+    """1X2 prices per match from one snapshot: Pinnacle where quoted, else the bookmaker median."""
+    from epl_model.data.names import normalize_team_names
+
+    h2h = snapshot.loc[(snapshot["sport"] == sport) & (snapshot["market"] == "h2h")].copy()
+    if h2h.empty:
+        return pd.DataFrame(columns=["home", "away", "commence_time", "odds_home", "odds_draw", "odds_away", "odds_source"])
+    h2h["side"] = np.select([h2h["outcome"] == h2h["home"], h2h["outcome"] == h2h["away"]], ["odds_home", "odds_away"], "odds_draw")
+    keys = ["event_id", "home", "away", "commence_time"]
+    wide = h2h.pivot_table(index=keys + ["bookmaker"], columns="side", values="price").dropna().reset_index()
+    rows = []
+    for _, group in wide.groupby(keys):
+        pinnacle = group.loc[group["bookmaker"] == "pinnacle"]
+        prices = ["odds_home", "odds_draw", "odds_away"]
+        chosen, source = (pinnacle.iloc[0], "pinnacle") if not pinnacle.empty else (group[prices].median(), "bookmaker_median")
+        first = group.iloc[0]
+        rows.append({"home": first["home"], "away": first["away"], "commence_time": first["commence_time"],
+                     **{column: float(chosen[column]) for column in prices}, "odds_source": source})
+    prices = pd.DataFrame(rows)
+    prices["home"] = normalize_team_names(prices["home"], "odds_api")
+    prices["away"] = normalize_team_names(prices["away"], "odds_api")
+    return prices
+
+
+def attach_market_odds(fixtures: pd.DataFrame, snapshot_path: Path | None) -> pd.DataFrame:
+    """Add odds_home/draw/away and odds_source to fixtures (same teams, kickoff within a day).
+
+    Any problem leaves the fixtures without market fields and logs a warning.
+    """
+    if snapshot_path is None or fixtures.empty:
+        return fixtures
+    try:
+        prices = match_odds(pd.read_csv(snapshot_path))
+        merged = fixtures.merge(prices, on=["home", "away"], how="left", validate="many_to_one")
+        gap = (pd.to_datetime(merged["kickoff_utc"], utc=True) - pd.to_datetime(merged["commence_time"], utc=True)).abs()
+        stale = gap > pd.Timedelta(days=1)
+        merged.loc[stale, ["odds_home", "odds_draw", "odds_away", "odds_source"]] = None
+        LOGGER.info("Attached market odds to %d of %d fixtures", int(merged["odds_home"].notna().sum()), len(merged))
+        return merged.drop(columns="commence_time")
+    except Exception as error:  # noqa: BLE001 - market fields are optional
+        LOGGER.warning("Could not attach market odds: %s", error)
+        return fixtures

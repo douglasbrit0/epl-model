@@ -10,7 +10,7 @@ DEFAULT_MAP = Path(__file__).resolve().parents[3] / "data" / "team_name_map.csv"
 
 def normalize_team_names(values: pd.Series, source: str, mapping_path: Path = DEFAULT_MAP) -> pd.Series:
     """Map exact source spellings to canonical names; unknown names are an error."""
-    if source not in {"football_data", "understat", "football_data_org", "fpl"}:
+    if source not in {"football_data", "understat", "football_data_org", "fpl", "odds_api"}:
         raise ValueError(f"Unknown team-name source {source!r}")
     table = pd.read_csv(mapping_path, dtype=str).fillna("")
     lookup = dict(zip(table[source], table["canonical"], strict=True))
