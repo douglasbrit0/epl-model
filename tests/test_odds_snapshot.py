@@ -30,21 +30,31 @@ def test_snapshot_skips_without_key_and_survives_api_failure(tmp_path, monkeypat
     assert odds_api.take_odds_snapshot(tmp_path) is None
     monkeypatch.setenv("ODDS_API_KEY", "x")
 
-    def broken(sport, key):
+    def broken(*args):
         raise ConnectionError("down")
 
     monkeypatch.setattr(odds_api, "fetch_odds", broken)
+    monkeypatch.setattr(odds_api, "outright_sports", broken)
     assert odds_api.take_odds_snapshot(tmp_path) is None
     assert list(tmp_path.iterdir()) == []
 
 
 def test_snapshot_writes_one_file_per_run(tmp_path, monkeypatch):
     monkeypatch.setenv("ODDS_API_KEY", "x")
-    monkeypatch.setattr(odds_api, "fetch_odds", lambda sport, key: ([EVENT], "492"))
+    calls = []
+
+    def fake(sport, key, markets, regions):
+        calls.append((sport, markets, regions))
+        return [EVENT], "492"
+
+    monkeypatch.setattr(odds_api, "fetch_odds", fake)
+    monkeypatch.setattr(odds_api, "outright_sports", lambda key: ["soccer_epl_winner"])
     path = odds_api.take_odds_snapshot(tmp_path, now=datetime(2026, 10, 13, 6, tzinfo=timezone.utc))
     loaded = odds_api.load_odds_snapshots(tmp_path)
     assert path.name == "odds_20261013T060000Z.csv.gz"
-    assert set(loaded["sport"]) == {"soccer_epl", "soccer_efl_champ"}
+    assert set(loaded["sport"]) == {"soccer_epl", "soccer_efl_champ", "soccer_epl_winner"}
+    assert ("soccer_epl", "h2h,totals", "uk,eu,us_ex") in calls
+    assert ("soccer_epl_winner", "outrights", "eu,us_ex") in calls
 
 
 def test_market_odds_attach_pinnacle_prices_by_teams_and_date(tmp_path, monkeypatch):
@@ -57,8 +67,8 @@ def test_market_odds_attach_pinnacle_prices_by_teams_and_date(tmp_path, monkeypa
     event = {"id": "e1", "commence_time": "2026-10-18T13:00:00Z", "home_team": "Brighton and Hove Albion", "away_team": "Arsenal",
              "bookmakers": [soft, pinnacle]}
     monkeypatch.setenv("ODDS_API_KEY", "x")
-    monkeypatch.setattr(odds_api, "fetch_odds", lambda sport, key: ([event], "490"))
-    path = odds_api.take_odds_snapshot(tmp_path, sports=("soccer_epl",))
+    monkeypatch.setattr(odds_api, "fetch_odds", lambda sport, key, markets, regions: ([event], "490"))
+    path = odds_api.take_odds_snapshot(tmp_path, requests_=(("soccer_epl", "h2h", "eu"),), outrights=False)
     fixtures = pd.DataFrame([
         {"fixture_id": "fdo:1", "kickoff_utc": "2026-10-18T13:00:00Z", "home": "Brighton", "away": "Arsenal"},
         {"fixture_id": "fdo:2", "kickoff_utc": "2026-10-18T15:00:00Z", "home": "Chelsea", "away": "Fulham"},

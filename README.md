@@ -11,7 +11,10 @@ A standalone Python model and daily data pipeline for Premier League scoreline d
 
 - Each daily run first saves two timestamped, append-only snapshots on the `data` branch under `logs/`. Neither is used by the model yet, and a failure in either only logs a warning:
   - FPL player availability (status, chance of playing, injury news) from the public bootstrap-static API, in `logs/fpl_snapshots/`.
-  - When the `ODDS_API_KEY` secret is set, bookmaker 1X2 and Over/Under prices for the EPL and Championship from The Odds API (UK and EU regions, including Pinnacle), in `logs/odds_snapshots/`. This uses about 8 of the free tier's 500 monthly credits per run.
+  - When the `ODDS_API_KEY` secret is set, prices from The Odds API in `logs/odds_snapshots/`. It uses about 12 of the free tier's 500 monthly credits per run:
+    - EPL 1X2 and Over/Under from UK and EU bookmakers (including Pinnacle) and US exchanges (Kalshi, Polymarket, which are the venues accessible from Texas).
+    - Championship 1X2 and Over/Under from UK and EU bookmakers.
+    - EPL season (outright) markets from EU bookmakers and US exchanges.
 
 The sources' exact team names are normalized through `data/team_name_map.csv`. Unknown teams and unmatched xG records raise errors. Raw CSVs and xG exports belong in `data/raw/`; processed match data is parquet under `data/processed/`.
 

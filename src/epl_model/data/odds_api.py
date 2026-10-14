@@ -4,9 +4,13 @@ football-data.co.uk only records one pre-match and one closing price per bookmak
 enough to test betting at a chosen time or line shopping against Pinnacle. Each run stores every
 bookmaker's 1X2 and totals prices for upcoming matches, with that bookmaker's own last-update time.
 
-Requires ODDS_API_KEY (free tier: 500 credits/month). Each sport costs one credit per market per
-region, so the default 2 sports x 2 markets x 2 regions = 8 credits per run. Team names are stored as
-the API spells them; mapping to canonical names happens when the snapshots are used.
+Requires ODDS_API_KEY (free tier: 500 credits/month). Each request costs one credit per market per
+region. Defaults, about 12 credits per run:
+- EPL matches: 1X2 + totals from UK and EU bookmakers (EU includes Pinnacle, the sharp reference)
+  and US exchanges (``us_ex``: Kalshi, Polymarket, ...), the venues usable from Texas.
+- Championship matches: 1X2 + totals, UK and EU (research only).
+- EPL outright (season) markets found via the free sports list: EU and US exchanges.
+Team names are stored as the API spells them; mapping happens when snapshots are used.
 """
 
 from __future__ import annotations
@@ -22,17 +26,27 @@ import requests
 
 LOGGER = logging.getLogger(__name__)
 API_URL = "https://api.the-odds-api.com/v4/sports/{sport}/odds"
-SPORTS = ("soccer_epl", "soccer_efl_champ")
-MARKETS = "h2h,totals"
-# "eu" includes Pinnacle, the sharp reference price; "uk" covers the bookmakers available to bet with.
-REGIONS = "uk,eu"
+SPORTS_URL = "https://api.the-odds-api.com/v4/sports"
+# (sport, markets, regions) per request.
+REQUESTS = (
+    ("soccer_epl", "h2h,totals", "uk,eu,us_ex"),
+    ("soccer_efl_champ", "h2h,totals", "uk,eu"),
+)
+OUTRIGHT_PREFIX, OUTRIGHT_REGIONS = "soccer_epl", "eu,us_ex"
 COLUMNS = ["fetched_at", "sport", "event_id", "commence_time", "home", "away", "bookmaker", "bookmaker_update",
            "market", "outcome", "point", "price"]
 
 
-def fetch_odds(sport: str, api_key: str, timeout: int = 30) -> tuple[list, str | None]:
+def outright_sports(api_key: str, timeout: int = 30) -> list[str]:
+    """Active EPL outright (season) markets; listing sports costs no credits."""
+    response = requests.get(SPORTS_URL, params={"apiKey": api_key}, timeout=timeout)
+    response.raise_for_status()
+    return [sport["key"] for sport in response.json() if sport.get("has_outrights") and sport.get("key", "").startswith(OUTRIGHT_PREFIX)]
+
+
+def fetch_odds(sport: str, api_key: str, markets: str = "h2h,totals", regions: str = "uk,eu", timeout: int = 30) -> tuple[list, str | None]:
     """Fetch current prices for one sport; also returns the remaining-credit header."""
-    params = {"apiKey": api_key, "regions": REGIONS, "markets": MARKETS, "oddsFormat": "decimal", "dateFormat": "iso"}
+    params = {"apiKey": api_key, "regions": regions, "markets": markets, "oddsFormat": "decimal", "dateFormat": "iso"}
     response = requests.get(API_URL.format(sport=sport), params=params, timeout=timeout)
     response.raise_for_status()
     events = response.json()
@@ -66,17 +80,23 @@ def flatten(events: list, sport: str, fetched_at: datetime) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=COLUMNS)
 
 
-def take_odds_snapshot(directory: Path, now: datetime | None = None, sports: tuple[str, ...] = SPORTS) -> Path | None:
+def take_odds_snapshot(directory: Path, now: datetime | None = None, requests_: tuple[tuple[str, str, str], ...] = REQUESTS, outrights: bool = True) -> Path | None:
     """Fetch and store one snapshot; a missing key or any failure is logged and never raised."""
     api_key = os.getenv("ODDS_API_KEY")
     if not api_key:
         LOGGER.info("ODDS_API_KEY not set; skipping odds snapshot")
         return None
     fetched_at = now or datetime.now(timezone.utc)
-    frames = []
-    for sport in sports:
+    plan = list(requests_)
+    if outrights:
         try:
-            events, remaining = fetch_odds(sport, api_key)
+            plan += [(sport, "outrights", OUTRIGHT_REGIONS) for sport in outright_sports(api_key)]
+        except Exception as error:  # noqa: BLE001
+            LOGGER.warning("Could not list outright markets: %s", error)
+    frames = []
+    for sport, markets, regions in plan:
+        try:
+            events, remaining = fetch_odds(sport, api_key, markets, regions)
         except Exception as error:  # noqa: BLE001 - odds data must never block predictions
             LOGGER.warning("Odds snapshot for %s failed: %s", sport, error)
             continue
