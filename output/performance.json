@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-10-20T10:30:43.262021Z",
-  "model_version": "dc-goals-xi0.0025-prior0.5-alpha0.00",
+  "generated_at": "2026-10-20T20:07:25.227083Z",
+  "model_version": "dc-xg-xi0.0025-prior0.5-alpha0.50",
   "rolling": [
     {
-      "window_end": "2026-10-12",
-      "model_log_loss": 1.0601458191418065,
-      "model_rps": 0.21189778112420185,
-      "market_log_loss": 1.052531126203126,
-      "market_rps": 0.20911822723805074
+      "window_end": "2026-10-19",
+      "model_log_loss": 1.0487619403810335,
+      "model_rps": 0.21057830727200388,
+      "market_log_loss": 1.0415986443909337,
+      "market_rps": 0.20837067769111053
     },
     {
       "window_end": "2026-10-19",
@@ -61,5 +61,5 @@
       "count": 2
     }
   ],
-  "cumulative_flat_stake_pnl": -118.94999999999999
+  "cumulative_flat_stake_pnl": -95.66
 }
