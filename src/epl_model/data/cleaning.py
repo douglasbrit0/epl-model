@@ -34,7 +34,7 @@ def join_xg(results: pd.DataFrame, xg: pd.DataFrame) -> pd.DataFrame:
 def attach_optional_xg(results: pd.DataFrame, xg_path: Path) -> pd.DataFrame:
     """Join an npxG export when one is supplied; otherwise run goals-only with a warning."""
     if not xg_path.exists():
-        LOGGER.warning("No xG export at %s; running the goals-only model", xg_path)
+        LOGGER.info("No Understat npxG export at %s; skipping it (FPL xG is used separately)", xg_path)
         return results
     from epl_model.data.understat import load_understat_npxg
 

@@ -53,7 +53,7 @@ jobs:
           UNDERSTAT_NPXG_URL: ${{ secrets.UNDERSTAT_NPXG_URL }}
         run: |
           if [ -z "$UNDERSTAT_NPXG_URL" ]; then
-            echo "No UNDERSTAT_NPXG_URL secret: running the goals-only model."
+            echo "No UNDERSTAT_NPXG_URL secret: skipping the optional Understat export (FPL xG is used)."
             exit 0
           fi
           curl --fail --location --silent --show-error "$UNDERSTAT_NPXG_URL" -o data/raw/understat_npxg.csv
