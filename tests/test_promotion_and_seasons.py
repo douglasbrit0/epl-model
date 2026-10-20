@@ -87,6 +87,9 @@ def test_gradient_matches_finite_differences_with_promotion_penalty():
 def test_xg_blend_is_selected_on_actual_goals():
     data = league()
     rng = np.random.default_rng(1)
+    strength = {"A": 2.4, "B": 1.8, "C": 1.4, "D": 1.1, "E": 0.8, "F": 0.6, "G": 0.6, "H": 0.6}
+    data["home_goals"] = rng.poisson([strength[h] * 1.2 / strength[a] ** 0.5 for h, a in zip(data.home, data.away)])
+    data["away_goals"] = rng.poisson([strength[a] / strength[h] ** 0.5 for h, a in zip(data.home, data.away)])
     data["npxg_home"] = rng.gamma(4, 1.4 / 4, len(data))  # pure noise: no team information
     data["npxg_away"] = rng.gamma(4, 1.1 / 4, len(data))
     fitted = SmallLeagueModel(xi_candidates=(0.0,), alpha_candidates=(0.0, 1.0)).fit(data, "2023-12-01")

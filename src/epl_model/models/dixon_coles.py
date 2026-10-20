@@ -88,6 +88,7 @@ class DixonColesModel:
         home_shrink: float | None = None,
         effect_ridge: float = 0.0,
         effect_scale: float = 1.0,
+        xg_columns: tuple[str, str] = ("npxg_home", "npxg_away"),
     ) -> None:
         self.xi_candidates = tuple(xi_candidates)
         self.alpha_candidates = tuple(alpha_candidates)
@@ -100,6 +101,7 @@ class DixonColesModel:
         self.home_shrink = home_shrink
         self.effect_ridge = effect_ridge
         self.effect_scale = effect_scale
+        self.xg_columns = xg_columns
         self.home_delta: dict[str, float] = {}
         self._centre = (0.0, 0.0)
         # Optional per-team fallback ratings for teams with no data (default: the single prior).
@@ -189,16 +191,26 @@ class DixonColesModel:
             raise AssertionError("Temporal cutoff violation in model fit")
         return self
 
-    @staticmethod
-    def _has_npxg(data: pd.DataFrame) -> bool:
-        return {"npxg_home", "npxg_away"}.issubset(data.columns) and data[["npxg_home", "npxg_away"]].notna().all().all()
+    def _has_npxg(self, data: pd.DataFrame) -> bool:
+        """True when the xG columns exist and at least some training matches have xG."""
+        columns = list(self.xg_columns)
+        return set(columns).issubset(data.columns) and bool(data[columns].notna().all(axis=1).any())
 
     def _targets(self, data: pd.DataFrame, alpha: float) -> tuple[np.ndarray, np.ndarray]:
+        """Blend goals with xG where xG exists; matches without xG keep their goals.
+
+        xG is rescaled so its total matches goals over the same training matches, so blending
+        changes the information used, not the overall scoring level.
+        """
         home = data["home_goals"].to_numpy(dtype=float)
         away = data["away_goals"].to_numpy(dtype=float)
         if alpha and self._has_npxg(data):
-            home = (1 - alpha) * home + alpha * data["npxg_home"].to_numpy(dtype=float)
-            away = (1 - alpha) * away + alpha * data["npxg_away"].to_numpy(dtype=float)
+            xg_home = data[self.xg_columns[0]].to_numpy(dtype=float)
+            xg_away = data[self.xg_columns[1]].to_numpy(dtype=float)
+            known = np.isfinite(xg_home) & np.isfinite(xg_away)
+            scale = (home[known].sum() + away[known].sum()) / max(xg_home[known].sum() + xg_away[known].sum(), 1e-9)
+            home = np.where(known, (1 - alpha) * home + alpha * scale * np.where(known, xg_home, 0.0), home)
+            away = np.where(known, (1 - alpha) * away + alpha * scale * np.where(known, xg_away, 0.0), away)
         return home, away
 
     def _unpack(self, params: np.ndarray) -> tuple[float, float, np.ndarray, np.ndarray, float]:

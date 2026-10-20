@@ -5,7 +5,7 @@ from epl_model.data.football_data import load_history
 from epl_model.data.names import normalize_match_teams
 
 def matches():
-    return normalize_match_teams(load_history(sorted(Path(__file__).resolve().parents[1] / "data" / "raw".glob("E0_*.csv"))), "football_data")
+    return normalize_match_teams(load_history(sorted((Path(__file__).resolve().parents[1] / "data" / "raw").glob("E0_*.csv"))), "football_data")
 
 def scores(df):
     y = df.outcome.to_numpy(int); p = df[["p_home", "p_draw", "p_away"]].to_numpy(); oh = np.eye(3)[y]

@@ -320,3 +320,46 @@ Routes that could produce an edge, all needing new data:
 3. **Genuinely private information or modelling:** e.g. tracking-data models.
 
 None is achievable with the free data currently in the repo.
+
+---
+
+# Phase 3 — new information
+
+## E9 — Expected goals from FPL player data (accepted → **production**)
+
+- **Hypothesis:** xG measures chance quality, which predicts future scoring better than goals alone.
+  Understat is off-limits (its robots.txt disallows crawling), but FPL publishes Opta xG per player
+  per match from 2022/23. Summing each team's players gives team xG per match.
+- **Data (`data/fpl_xg.py`):**
+  - Completed seasons come from the vaastav/Fantasy-Premier-League archive. The current season comes
+    from FPL's live gameweek endpoint (one request per finished gameweek).
+  - Coverage 2022/23–2025/26: 380/380 matches each season. Team xG vs goals per team-match:
+    correlation 0.49; mean 1.35 vs 1.48.
+  - xG includes penalties (FPL has no non-penalty split).
+  - Live caveats: players are credited to their *current* club, so a few matches of players who have
+    since transferred are mis-credited (0.47 xG over the first 7 gameweeks of 2026/27). Matches in a
+    gameweek where a team plays twice get no xG and use goals.
+- **Change:**
+  - Training target = (1 − α)·goals + α·xG·s on matches with xG; goals elsewhere. The scale s
+    matches total xG to total goals over the training matches, so blending changes the information
+    used, not the scoring level. The low-score correction still uses actual goals.
+  - α ∈ {0, 0.25, 0.5, 0.75, 1}, nested-selected on top of each season's E3 configuration (stage 2
+    of the tuning).
+- **Selections:** α = 0 through 2022/23 (no xG history yet), then 0.25 for 2023/24 and 0.5 from
+  2024/25. In hindsight α = 0.5 is best (LL 0.97305 vs 0.97482 at α = 0).
+
+| Window | ΔLL vs E3 [95% CI] | ΔRPS vs E3 [95% CI] |
+|---|---|---|
+| 2023/24 | −0.0034 [−0.0073, +0.0007] | −0.0012 [−0.0025, +0.0001] |
+| 2024/25 | −0.0083 [−0.0164, −0.0011] | −0.0033 [−0.0059, −0.0009] |
+| 2025/26 | −0.0013 [−0.0082, +0.0050] | −0.0008 [−0.0030, +0.0013] |
+| **2023/24–2025/26** | **−0.0043 [−0.0081, −0.0007]** | **−0.0018 [−0.0030, −0.0006]** |
+| All (3,100) | −0.0015 [−0.0030, −0.0000] | −0.0006 [−0.0011, −0.0002] |
+
+- **Decision:** accepted. It clears the bar on the latest three full seasons for both LL and RPS,
+  and is the first new information to do so. The gain is limited by history: training only has xG
+  for the last 1–3 seasons, so the effect should grow as xG seasons accumulate.
+- **Production:**
+  - `run_backtest.py` tunes α as stage 2 and stores it in `reports/tuning.json`.
+  - The daily job attaches archive and live FPL xG; model versions with α > 0 are labelled `dc-xg-…`.
+  - If an FPL download fails, the run logs a warning and those matches use goals.

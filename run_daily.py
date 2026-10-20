@@ -8,6 +8,7 @@ import pandas as pd
 from epl_model.data.cleaning import attach_optional_xg
 from epl_model.data.football_data import download_history, load_history
 from epl_model.data.fpl import take_snapshot
+from epl_model.data.fpl_xg import attach_team_xg, load_team_xg
 from epl_model.data.odds_api import attach_market_odds, take_odds_snapshot
 from epl_model.data.football_data_org import season_fixtures, unplayed, upcoming_fixtures
 from epl_model.data.names import normalize_match_teams
@@ -30,6 +31,7 @@ def main() -> None:
     history_paths = download_history(raw)
     results = normalize_match_teams(load_history(history_paths), "football_data")
     matches = attach_optional_xg(results, raw / "understat_npxg.csv")
+    matches = attach_team_xg(matches, load_team_xg(raw / "fpl_archive", season_start_year(pd.Timestamp.now(tz="UTC"))))
     save_matches(matches, processed / "matches.parquet")
     now = pd.Timestamp.now(tz="UTC")
     ten_day_fixtures = upcoming_fixtures(days=10, now=now.to_pydatetime())

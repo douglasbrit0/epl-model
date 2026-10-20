@@ -92,3 +92,12 @@ def test_nested_tuning_chooses_each_season_from_earlier_seasons_only():
     assert chosen[2019]["xi"] == 0.001  # only 2018 is visible; the 2019 result must not leak in
     assert chosen[2020]["xi"] in (0.001, 0.002)
     assert production["xi"] == 0.002
+
+
+def test_nested_tuning_supports_a_single_tuned_key():
+    from epl_model.evaluation.tuning import nested_select
+
+    rows = [{"season": season, "matchweek": 1, "alpha": alpha, "outcome": 0, "p_home": p, "p_draw": (1 - p) / 2, "p_away": (1 - p) / 2}
+            for season in (2018, 2019) for alpha, p in ((0.0, 0.4), (0.5, 0.6))]
+    _, chosen, production = nested_select(pd.DataFrame(rows), default={"alpha": 0.0})
+    assert chosen[2018] == {"alpha": 0.0} and chosen[2019] == {"alpha": 0.5} and production == {"alpha": 0.5}

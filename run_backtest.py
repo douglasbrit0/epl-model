@@ -11,8 +11,10 @@ from epl_model.data.cleaning import attach_optional_xg
 from epl_model.data.football_data import download_history, load_history
 from epl_model.evaluation.backtest import flat_stake_edges, flat_stake_profit, summarize_walk_forward
 from epl_model.evaluation.metrics import closing_odds_probabilities, reliability_bins
+from epl_model.data.fpl_xg import attach_team_xg, load_team_xg
 from epl_model.data.names import normalize_match_teams
-from epl_model.evaluation.tuning import nested_select, run_grid, save_tuning
+from epl_model.seasons import season_start_year
+from epl_model.evaluation.tuning import DEFAULT_ALPHA, nested_select, run_alpha_grid, run_grid, save_tuning
 from epl_model.pipeline import backtest_summary
 
 ROOT = Path(__file__).resolve().parent
@@ -24,10 +26,15 @@ def main() -> None:
     history = load_history(download_history(ROOT / "data" / "raw"))
     history = normalize_match_teams(history, "football_data")
     matches = attach_optional_xg(history, ROOT / "data" / "raw" / "understat_npxg.csv")
+    current_season = season_start_year(pd.Timestamp.now(tz="UTC"))
+    matches = attach_team_xg(matches, load_team_xg(ROOT / "data" / "raw" / "fpl_archive", current_season))
     # Every grid configuration is backtested; each season uses the one that was best on earlier seasons.
     grid = run_grid(matches)
-    baseline, chosen, production = nested_select(grid)
-    save_tuning(reports / "tuning.json", chosen, production)
+    _, chosen, production = nested_select(grid)
+    # Stage 2: the goals/xG blend, tuned with each season's stage-1 configuration fixed.
+    baseline, alpha_by_season, best_alpha = nested_select(run_alpha_grid(matches, chosen), default={"alpha": DEFAULT_ALPHA})
+    production = {**production, **best_alpha}
+    save_tuning(reports / "tuning.json", chosen, production, alpha_by_season)
     print(f"Production config: {production}")
     baseline["flat_stake_profit"] = flat_stake_profit(baseline, threshold=0.02)
     baseline.to_csv(reports / "walk_forward.csv", index=False)
