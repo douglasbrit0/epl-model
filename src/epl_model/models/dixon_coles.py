@@ -89,6 +89,8 @@ class DixonColesModel:
         effect_ridge: float = 0.0,
         effect_scale: float = 1.0,
         xg_columns: tuple[str, str] = ("npxg_home", "npxg_away"),
+        covariates: tuple[str, ...] = (),
+        covariate_ridge: float = 10.0,
     ) -> None:
         self.xi_candidates = tuple(xi_candidates)
         self.alpha_candidates = tuple(alpha_candidates)
@@ -102,6 +104,12 @@ class DixonColesModel:
         self.effect_ridge = effect_ridge
         self.effect_scale = effect_scale
         self.xg_columns = xg_columns
+        # Match-level adjustments to expected goals. For each name, column ``home_<name>`` is added to
+        # the home team's log-rate and ``away_<name>`` to the away team's, with one shared fitted
+        # coefficient (Gaussian penalty of precision covariate_ridge). Missing values count as 0.
+        self.covariates = tuple(covariates)
+        self.covariate_ridge = covariate_ridge
+        self.covariate_coef: dict[str, float] = {}
         self.home_delta: dict[str, float] = {}
         self._centre = (0.0, 0.0)
         # Optional per-team fallback ratings for teams with no data (default: the single prior).
@@ -230,6 +238,22 @@ class DixonColesModel:
         start = 2 + 2 * (count - 1)
         return params[start : start + count]
 
+    def _coef_start(self) -> int:
+        count = len(self.teams)
+        return 2 + 2 * (count - 1) + (count if self.home_shrink is not None else 0)
+
+    def _coefs(self, params: np.ndarray) -> np.ndarray:
+        start = self._coef_start()
+        return params[start : start + len(self.covariates)]
+
+    def _covariate_matrices(self, rows: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+        if not self.covariates:
+            return np.zeros((len(rows), 0)), np.zeros((len(rows), 0))
+        def matrix(side: str) -> np.ndarray:
+            columns = [rows[f"{side}_{name}"] if f"{side}_{name}" in rows else pd.Series(0.0, index=rows.index) for name in self.covariates]
+            return np.nan_to_num(np.column_stack([pd.to_numeric(c, errors="coerce").to_numpy(float) for c in columns]))
+        return matrix("home"), matrix("away")
+
     def _team_indices(self, rows: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
         index = {team: i for i, team in enumerate(self.teams)}
         home = rows["home"].map(index).fillna(-1).to_numpy(dtype=int)
@@ -242,9 +266,11 @@ class DixonColesModel:
         # Unknown teams (index -1) take the promoted-team prior.
         attack, defence = np.r_[attack, self._unseen[0]], np.r_[defence, self._unseen[1]]
         deltas = np.r_[self._home_deltas(params), 0.0]
+        x_home, x_away = self._covariate_matrices(rows)
+        coefs = self._coefs(params)
         return (
-            np.exp(np.clip(mu + home_adv + deltas[home] + attack[home] - defence[away], -5, 4)),
-            np.exp(np.clip(mu + attack[away] - defence[home], -5, 4)),
+            np.exp(np.clip(mu + home_adv + deltas[home] + attack[home] - defence[away] + x_home @ coefs, -5, 4)),
+            np.exp(np.clip(mu + attack[away] - defence[home] + x_away @ coefs, -5, 4)),
         )
 
     @staticmethod
@@ -326,6 +352,7 @@ class DixonColesModel:
             "home": home,
             "away": away,
             "penalty": penalty,
+            "covariates": self._covariate_matrices(data),
         }
 
     def _nll_and_grad(self, params: np.ndarray, design: dict[str, np.ndarray]) -> tuple[float, np.ndarray]:
@@ -334,8 +361,10 @@ class DixonColesModel:
         mu, home_adv, attack, defence, rho = self._unpack(params)
         home, away, w = design["home"], design["away"], design["w"]
         deltas = self._home_deltas(params)
-        eta_h_raw = mu + home_adv + deltas[home] + attack[home] - defence[away]
-        eta_a_raw = mu + attack[away] - defence[home]
+        x_home, x_away = design["covariates"]
+        coefs = self._coefs(params)
+        eta_h_raw = mu + home_adv + deltas[home] + attack[home] - defence[away] + x_home @ coefs
+        eta_a_raw = mu + attack[away] - defence[home] + x_away @ coefs
         ll, g_h, g_a, g_rho = dc_terms(eta_h_raw, eta_a_raw, rho, design)
         wg_h, wg_a = w * g_h, w * g_a
 
@@ -351,7 +380,15 @@ class DixonColesModel:
         if self.home_shrink is not None:
             start = 2 + 2 * (count - 1)
             grad[start : start + count] = np.bincount(home, wg_h, count)
+        if self.covariates:
+            first = self._coef_start()
+            grad[first : first + len(self.covariates)] = x_home.T @ wg_h + x_away.T @ wg_a
         value, grad = float(-np.sum(w * ll)), -grad
+
+        if self.covariates:
+            scale = self.covariate_ridge / design["weight_sum"]
+            value += 0.5 * scale * float(coefs @ coefs)
+            grad[first : first + len(self.covariates)] += scale * coefs
 
         if self.home_shrink is not None:
             scale = self.home_shrink / design["weight_sum"]
@@ -387,7 +424,7 @@ class DixonColesModel:
         penalty = self._promotion_penalty(data, season)
         count = len(self.teams)
         if initial is None:
-            initial = np.zeros(2 + 2 * (count - 1) + (count if self.home_shrink is not None else 0) + 1)
+            initial = np.zeros(2 + 2 * (count - 1) + (count if self.home_shrink is not None else 0) + len(self.covariates) + 1)
             initial[0] = np.log(max(0.2, (data["home_goals"].mean() + data["away_goals"].mean()) / 2))
             initial[1] = 0.2
         bounds = [(None, None)] * (len(initial) - 1) + [(-0.2, 0.2)]
@@ -421,6 +458,7 @@ class DixonColesModel:
         self.attack = dict(zip(self.teams, attack, strict=True))
         self.defence = dict(zip(self.teams, defence, strict=True))
         self.home_delta = dict(zip(self.teams, self._home_deltas(params), strict=True))
+        self.covariate_coef = dict(zip(self.covariates, (float(c) for c in self._coefs(params)), strict=True))
 
     def _mean_log_loss(self, data: pd.DataFrame, params: np.ndarray) -> float:
         """Scoreline log-loss on actual goals, so candidates with different xG blends are comparable."""
@@ -459,8 +497,11 @@ class DixonColesModel:
             variance = float(np.mean(np.square(values - values.mean(axis=0))))
             self.prior_strength = self.prior_scale / max(variance, 0.01)
 
-    def scoreline_matrix(self, home: str, away: str, max_goals: int | None = None) -> np.ndarray:
-        """Return P(home goals, away goals), normalized on the requested grid."""
+    def scoreline_matrix(self, home: str, away: str, max_goals: int | None = None, offsets: tuple[float, float] = (0.0, 0.0)) -> np.ndarray:
+        """Return P(home goals, away goals), normalized on the requested grid.
+
+        ``offsets`` are added to the home and away log-rates (fitted covariate adjustments).
+        """
         if not self.attack:
             raise RuntimeError("Fit the model before predicting")
         # Promoted teams use their shrunk fitted effects; teams never seen use the prior.
@@ -476,8 +517,8 @@ class DixonColesModel:
             home_def, away_def = centre_def + k * (home_def - centre_def), centre_def + k * (away_def - centre_def)
         home_att += self.home_delta.get(home, 0.0)
         # Same log-rate bounds as the likelihood, so sparse early fits cannot produce zero rates.
-        home_rate = float(np.exp(np.clip(self.mu + self.home_advantage + home_att - away_def, -5, 4)))
-        away_rate = float(np.exp(np.clip(self.mu + away_att - home_def, -5, 4)))
+        home_rate = float(np.exp(np.clip(self.mu + self.home_advantage + home_att - away_def + offsets[0], -5, 4)))
+        away_rate = float(np.exp(np.clip(self.mu + away_att - home_def + offsets[1], -5, 4)))
         goals = self.max_goals if max_goals is None else max_goals
         values = np.arange(goals + 1)
         hp = np.exp(values * np.log(home_rate) - home_rate - gammaln(values + 1))
@@ -494,9 +535,12 @@ class DixonColesModel:
     def predict(self, fixtures: pd.DataFrame) -> list[ScorelineForecast]:
         """Produce normalized scoreline distributions for all supplied fixtures."""
         forecasts = []
-        for row in fixtures.to_dict("records"):
+        coefs = np.array([self.covariate_coef.get(name, 0.0) for name in self.covariates])
+        x_home, x_away = self._covariate_matrices(fixtures.reset_index(drop=True))
+        for position, row in enumerate(fixtures.to_dict("records")):
             home, away = str(row["home"]), str(row["away"])
-            matrix = self.scoreline_matrix(home, away)
+            offsets = (float(x_home[position] @ coefs), float(x_away[position] @ coefs)) if self.covariates else (0.0, 0.0)
+            matrix = self.scoreline_matrix(home, away, offsets=offsets)
             forecasts.append(
                 ScorelineForecast(
                     fixture_id=str(row.get("fixture_id", f"{row.get('kickoff_utc')}:{home}:{away}")),

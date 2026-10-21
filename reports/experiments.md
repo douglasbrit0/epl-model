@@ -363,3 +363,73 @@ None is achievable with the free data currently in the repo.
   - `run_backtest.py` tunes α as stage 2 and stores it in `reports/tuning.json`.
   - The daily job attaches archive and live FPL xG; model versions with α > 0 are labelled `dc-xg-…`.
   - If an FPL download fails, the run logs a warning and those matches use goals.
+
+## E10 — Player availability (rejected, including the oracle ceiling)
+
+- **Features (`features/availability.py`):**
+  - Regulars are players with ≥ 50% of minutes over the team's previous 8 matches (crossing
+    seasons). Attacking value is a player's share of the team's FPL threat + creativity over that
+    window.
+  - Per team-match: attacking share missing, defenders' minutes share missing, and the regular
+    goalkeeper missing (0/1).
+  - The model takes them as log-rate covariates with shared coefficients: own attack missing lowers
+    the team's expected goals; the opponent's missing defence or keeper raises them. Coefficients
+    are fitted inside the walk-forward likelihood (new generic covariate support in
+    `DixonColesModel`). The penalty precision {1, 10, 100} is nested-selected, starting from "no
+    covariates".
+- **Variants:**
+  - **Oracle:** missing = did not play in this match (actual lineup). An upper bound that is not
+    achievable before kickoff.
+  - **Previous:** missing = did not play in the team's previous match (known before kickoff).
+- **Results vs production (E9):**
+
+| Variant | ΔLL 2023/24–2025/26 [95% CI] | ΔRPS 2023/24–2025/26 | ΔLL all |
+|---|---|---|---|
+| Oracle | −0.0006 [−0.0016, +0.0004] | −0.0001 [−0.0005, +0.0002] | +0.0007 [−0.0004, +0.0018] |
+| Previous match | −0.0001 [−0.0009, +0.0007] | +0.0000 [−0.0003, +0.0003] | +0.0001 [−0.0004, +0.0007] |
+
+- **Fitted coefficients** (oracle, all data to 2026-07, weak penalty), per unit of the feature:
+  - attack missing −0.27, i.e. losing a quarter of attacking output → about −6% expected goals;
+  - opponent defence missing +0.07;
+  - opponent goalkeeper missing −0.02, essentially zero.
+- **Why rejected:**
+  - Even with perfect lineup knowledge the ceiling is about −0.0006 LL, so the realistic version
+    cannot clear the bar.
+  - The large raw pattern (teams score 1.78 vs 1.56 goals when the opponent's regular keeper is
+    out) disappears once team strength is modelled. Absences are confounded with team form, which
+    the decayed ratings already capture (long injuries show up in recent results).
+  - The audit's larger market gap in "GK absent" matches therefore reflects something other than
+    the absence itself.
+- **Consequence:**
+  - Availability is not worth adding to the model as built. A better player-value model (e.g.
+    plus-minus) could raise the ceiling, but the oracle result makes a large gain unlikely.
+  - The FPL snapshots remain useful for showing key absences on DougBoard, as information rather
+    than as a model input.
+
+## E11 — Schedule: European fixtures and short rest (rejected, borderline)
+
+- **Features (`features/schedule.py`):**
+  - Per team-match: European match 1–4 days before (`europe_prev`), 1–4 days after
+    (`europe_next`), and ≤ 3 days since the previous league/European match (`short_rest`).
+  - Each enters for the team's own scoring and, as `opp_*`, for the opponent's scoring (6
+    covariates). Same fitting and nested penalty selection as E10.
+- **Data:**
+  - European fixtures come from openfootball (CC0): Champions League every season, Europa League
+    2020/21–2024/25, Conference League 2021/22–2024/25. Flags are therefore 0 for Europa League
+    clubs in 2017/18–2019/20 and 2025/26.
+  - No domestic cup data, so rest counts league and European matches only.
+- **Result vs production (E9):**
+  - 2023/24–2025/26: LL −0.0019 [−0.0042, +0.0005], RPS −0.0006 [−0.0014, +0.0001].
+  - All: LL −0.0019 [−0.0039, +0.0000], RPS −0.0007 [−0.0013, −0.0001].
+  - Nested selection chose penalty 1 from 2019 on.
+- **Fitted coefficients** (log-rate, all data to 2026-07):
+  - `europe_next` −0.050 (rotation before a European match);
+  - `short_rest` +0.033 and `opp_short_rest` +0.031 (congested matches are slightly higher-scoring
+    for both sides);
+  - `europe_prev` −0.015; the others ≈ 0.
+- **Why rejected:**
+  - The LL CI includes 0 on both windows, so it misses the bar. The effects are plausible and the
+    direction is consistent (better in 6 of 8 full seasons).
+  - **Revisit if** complete European and domestic-cup fixture data becomes available. Production
+    could currently only source Champions League fixtures (football-data.org's free tier has no
+    Europa League), which would weaken it further.
