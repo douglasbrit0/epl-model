@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-23T16:38:28.763811Z",
+  "generated_at": "2026-11-24T16:34:53.624394Z",
   "model_version": "dc-xg-xi0.0025-prior0.5-alpha0.50",
   "rolling": [
     {
@@ -10,11 +10,11 @@
       "market_rps": 0.20837067769111053
     },
     {
-      "window_end": "2026-11-22",
-      "model_log_loss": 0.9888000762462947,
-      "model_rps": 0.2115893532913285,
-      "market_log_loss": 0.965860169119213,
-      "market_rps": 0.20453836081787338
+      "window_end": "2026-11-23",
+      "model_log_loss": 0.9849210116867927,
+      "model_rps": 0.21089148732309348,
+      "market_log_loss": 0.9632831652840236,
+      "market_rps": 0.20426286671560712
     }
   ],
   "calibration_bins": [
@@ -32,9 +32,9 @@
     },
     {
       "bin": 2,
-      "mean_probability": 0.25564621058088105,
-      "observed_frequency": 0.24752475247524752,
-      "count": 101
+      "mean_probability": 0.2556522543206117,
+      "observed_frequency": 0.24271844660194175,
+      "count": 103
     },
     {
       "bin": 3,
@@ -44,9 +44,9 @@
     },
     {
       "bin": 4,
-      "mean_probability": 0.44944489034718343,
-      "observed_frequency": 0.53125,
-      "count": 32
+      "mean_probability": 0.4506158049926016,
+      "observed_frequency": 0.5454545454545454,
+      "count": 33
     },
     {
       "bin": 5,
@@ -73,5 +73,5 @@
       "count": 2
     }
   ],
-  "cumulative_flat_stake_pnl": -94.88000000000001
+  "cumulative_flat_stake_pnl": -93.78000000000002
 }
